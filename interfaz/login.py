@@ -1,5 +1,7 @@
 """Pantalla de login con PySide6 y QSS."""
 import os
+import sys
+from pathlib import Path
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel,
     QLineEdit, QPushButton, QFrame, QMainWindow,
@@ -9,16 +11,24 @@ from PySide6.QtCore import Qt, QPoint, QSize
 from PySide6.QtGui import QPixmap, QFont, QColor, QIcon, QMouseEvent
 
 
-# =============================================
+
+def resource_path(relative_path):
+    """Devuelve la ruta de un recurso, tanto en desarrollo como en PyInstaller."""
+    if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+        base_path = Path(sys._MEIPASS)
+    else:
+        base_path = Path(__file__).resolve().parent.parent
+    return str(base_path / relative_path)
+
+
 # RUTAS DE ASSETS
-# =============================================
-ASSETS_PATH = r"C:\Users\FliaSerapio\Desktop\Proyectos-de-Martin\Proyecto chero\asistencia_escolar\assets\login"
+ASSETS_PATH = resource_path(os.path.join("assets", "login"))
 FONDO_PATH = os.path.join(ASSETS_PATH, "fondo.jpg")
 ICONO_USER = os.path.join(ASSETS_PATH, "user.png")
 ICONO_LOCK = os.path.join(ASSETS_PATH, "lock.png")
-ICONO_MINIMIZAR = os.path.join(ASSETS_PATH, "minimize.png")     # <-- Tu icono minimizar
-ICONO_MAXIMIZAR = os.path.join(ASSETS_PATH, "maximize.png")     # <-- Tu icono maximizar
-ICONO_CERRAR = os.path.join(ASSETS_PATH, "close.png")           # <-- Tu icono cerrar
+ICONO_MINIMIZAR = os.path.join(ASSETS_PATH, "minimize.png")
+ICONO_MAXIMIZAR = os.path.join(ASSETS_PATH, "maximize.png")
+ICONO_CERRAR = os.path.join(ASSETS_PATH, "close.png")
 # =============================================
 
 FUENTE_MONO = "Courier New"
