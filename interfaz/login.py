@@ -1,37 +1,82 @@
-"""Pantalla de login con PySide6 y QSS."""
-import os
-import sys
-from pathlib import Path
+"""Pantalla de login con PySide6 y QSS.
+
+No depende de archivos de imagen externos: el fondo es un degradado
+armado con QSS y los iconos de usuario/candado se dibujan por codigo
+con QPainter. Asi la interfaz nunca queda "rota" por assets faltantes.
+"""
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel,
     QLineEdit, QPushButton, QFrame, QMainWindow,
     QGraphicsDropShadowEffect, QMessageBox
 )
-from PySide6.QtCore import Qt, QPoint, QSize
-from PySide6.QtGui import QPixmap, QFont, QColor, QIcon, QMouseEvent
-
-
-
-def resource_path(relative_path):
-    """Devuelve la ruta de un recurso, tanto en desarrollo como en PyInstaller."""
-    if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
-        base_path = Path(sys._MEIPASS)
-    else:
-        base_path = Path(__file__).resolve().parent.parent
-    return str(base_path / relative_path)
-
-
-# RUTAS DE ASSETS
-ASSETS_PATH = resource_path(os.path.join("assets", "login"))
-FONDO_PATH = os.path.join(ASSETS_PATH, "fondo.jpg")
-ICONO_USER = os.path.join(ASSETS_PATH, "user.png")
-ICONO_LOCK = os.path.join(ASSETS_PATH, "lock.png")
-ICONO_MINIMIZAR = os.path.join(ASSETS_PATH, "minimize.png")
-ICONO_MAXIMIZAR = os.path.join(ASSETS_PATH, "maximize.png")
-ICONO_CERRAR = os.path.join(ASSETS_PATH, "close.png")
-# =============================================
+from PySide6.QtCore import Qt, QPoint, QSize, QPointF, QRectF
+from PySide6.QtGui import (
+    QFont, QColor, QIcon, QPixmap, QPainter, QPainterPath, QPen
+)
 
 FUENTE_MONO = "Courier New"
+
+
+# =============================================
+# ICONOS DIBUJADOS POR CODIGO (sin archivos externos)
+# =============================================
+def _icono_usuario(size: int = 20, color: str = "#777777") -> QIcon:
+    pixmap = QPixmap(size, size)
+    pixmap.fill(Qt.transparent)
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.Antialiasing)
+    painter.setPen(Qt.NoPen)
+    painter.setBrush(QColor(color))
+
+    # Cabeza
+    radio = size * 0.16
+    painter.drawEllipse(QPointF(size / 2, size * 0.32), radio, radio)
+
+    # Cuerpo (curva tipo "hombros")
+    ruta = QPainterPath()
+    ruta.moveTo(size * 0.18, size * 0.88)
+    ruta.cubicTo(size * 0.18, size * 0.55, size * 0.82, size * 0.55, size * 0.82, size * 0.88)
+    ruta.closeSubpath()
+    painter.drawPath(ruta)
+
+    painter.end()
+    return QIcon(pixmap)
+
+
+def _icono_candado(size: int = 20, color: str = "#777777") -> QIcon:
+    pixmap = QPixmap(size, size)
+    pixmap.fill(Qt.transparent)
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.Antialiasing)
+
+    # Arco (grillete) sin relleno
+    pluma = QPen(QColor(color))
+    pluma.setWidth(2)
+    painter.setPen(pluma)
+    painter.setBrush(Qt.NoBrush)
+    painter.drawArc(QRectF(size * 0.27, size * 0.10, size * 0.46, size * 0.5), 0, 180 * 16)
+
+    # Cuerpo del candado
+    painter.setPen(Qt.NoPen)
+    painter.setBrush(QColor(color))
+    painter.drawRoundedRect(QRectF(size * 0.18, size * 0.45, size * 0.64, size * 0.42), 3, 3)
+
+    painter.end()
+    return QIcon(pixmap)
+
+
+def _icono_texto(caracter: str, size: int = 24, color: str = "#333333") -> QIcon:
+    """Genera un icono simple con un caracter (para minimizar/maximizar/cerrar)."""
+    pixmap = QPixmap(size, size)
+    pixmap.fill(Qt.transparent)
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.Antialiasing)
+    painter.setPen(QColor(color))
+    fuente = QFont(FUENTE_MONO, int(size * 0.6), QFont.Bold)
+    painter.setFont(fuente)
+    painter.drawText(pixmap.rect(), Qt.AlignCenter, caracter)
+    painter.end()
+    return QIcon(pixmap)
 
 
 class VentanaLogin(QMainWindow):
@@ -46,20 +91,28 @@ class VentanaLogin(QMainWindow):
         self.dragging = False
         self.drag_offset = QPoint()
 
-        # Widget central
+        # Referencia al dashboard, para que no lo recolecte el garbage collector
+        self.ventana_principal = None
+
+        # Widget central con el fondo en degradado (reemplaza a fondo.jpg)
         self.central = QWidget(self)
         self.central.setGeometry(0, 0, 1280, 720)
+        self.central.setStyleSheet("""
+            QWidget {
+                background: qlineargradient(
+                    x1:0, y1:0, x2:1, y2:1,
+                    stop:0 #1b1b2f,
+                    stop:0.5 #16213e,
+                    stop:1 #0f3057
+                );
+            }
+        """)
         self.setCentralWidget(self.central)
 
         # Layout para centrar la tarjeta automaticamente
         self.layout_centro = QGridLayout(self.central)
         self.layout_centro.setContentsMargins(0, 0, 0, 0)
         self.layout_centro.setSpacing(0)
-
-        # Fondo (se ajusta en resizeEvent)
-        self.label_fondo = QLabel(self.central)
-        self.label_fondo.setScaledContents(True)
-        self.label_fondo.setGeometry(0, 0, 1280, 720)
 
         # Tarjeta (se centra sola con el grid layout)
         self.tarjeta = QFrame(self.central)
@@ -82,21 +135,13 @@ class VentanaLogin(QMainWindow):
         self.barra_titulo = QWidget(self.central)
         self.barra_titulo.setFixedHeight(40)
         self.barra_titulo.setStyleSheet("background: transparent;")
-        self.barra_titulo.setAttribute(Qt.WA_TranslucentBackground, False)
 
         layout_barra = QHBoxLayout(self.barra_titulo)
         layout_barra.setContentsMargins(0, 5, 10, 0)
         layout_barra.setSpacing(8)
-
         layout_barra.addStretch()
 
-        # Boton minimizar
-        self.btn_minimizar = QPushButton(self.barra_titulo)
-        self.btn_minimizar.setFixedSize(24, 24)
-        self.btn_minimizar.setCursor(Qt.PointingHandCursor)
-        self.btn_minimizar.setIcon(QIcon(ICONO_MINIMIZAR))
-        self.btn_minimizar.setIconSize(QSize(14, 14))
-        self.btn_minimizar.setStyleSheet("""
+        estilo_boton_ventana = """
             QPushButton {
                 background-color: #ffffff;
                 border: none;
@@ -104,64 +149,49 @@ class VentanaLogin(QMainWindow):
                 padding: 4px;
             }
             QPushButton:hover { background-color: #e5e5e5; }
-        """)
+        """
+
+        # Boton minimizar
+        self.btn_minimizar = QPushButton(self.barra_titulo)
+        self.btn_minimizar.setFixedSize(24, 24)
+        self.btn_minimizar.setCursor(Qt.PointingHandCursor)
+        self.btn_minimizar.setIcon(_icono_texto("\u2013"))  # –
+        self.btn_minimizar.setIconSize(QSize(14, 14))
+        self.btn_minimizar.setStyleSheet(estilo_boton_ventana)
         self.btn_minimizar.clicked.connect(self.showMinimized)
 
         # Boton maximizar
         self.btn_maximizar = QPushButton(self.barra_titulo)
         self.btn_maximizar.setFixedSize(24, 24)
         self.btn_maximizar.setCursor(Qt.PointingHandCursor)
-        self.btn_maximizar.setIcon(QIcon(ICONO_MAXIMIZAR))
+        self.btn_maximizar.setIcon(_icono_texto("\u25a1"))  # □
         self.btn_maximizar.setIconSize(QSize(14, 14))
-        self.btn_maximizar.setStyleSheet("""
-            QPushButton {
-                background-color: #ffffff;
-                border: none;
-                border-radius: 12px;
-                padding: 4px;
-            }
-            QPushButton:hover { background-color: #e5e5e5; }
-        """)
+        self.btn_maximizar.setStyleSheet(estilo_boton_ventana)
         self.btn_maximizar.clicked.connect(self._alternar_maximizar)
 
         # Boton cerrar
         self.btn_cerrar = QPushButton(self.barra_titulo)
         self.btn_cerrar.setFixedSize(24, 24)
         self.btn_cerrar.setCursor(Qt.PointingHandCursor)
-        self.btn_cerrar.setIcon(QIcon(ICONO_CERRAR))
+        self.btn_cerrar.setIcon(_icono_texto("\u00d7", color="#cc3333"))  # ×
         self.btn_cerrar.setIconSize(QSize(14, 14))
-        self.btn_cerrar.setStyleSheet("""
-            QPushButton {
-                background-color: #ffffff;
-                border: none;
-                border-radius: 12px;
-                padding: 4px;
-            }
-            QPushButton:hover { background-color: #e5e5e5; }
-        """)
+        self.btn_cerrar.setStyleSheet(estilo_boton_ventana)
         self.btn_cerrar.clicked.connect(self.close)
 
         layout_barra.addWidget(self.btn_minimizar)
         layout_barra.addWidget(self.btn_maximizar)
         layout_barra.addWidget(self.btn_cerrar)
 
-        # La barra va en un layout superior sobre el fondo
-        self.layout_fondo = QGridLayout(self.label_fondo)
-        self.layout_fondo.setContentsMargins(0, 0, 0, 0)
-        self.layout_fondo.setSpacing(0)
-        # Encimar: barra arriba a la derecha sobre el fondo
-        self.layout_fondo.addWidget(self.barra_titulo, 0, 0, Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight)
-
-        # Cargar imagen de fondo
-        if os.path.exists(FONDO_PATH):
-            self.label_fondo.setPixmap(QPixmap(FONDO_PATH))
+        # La barra va arriba a la derecha, encimada sobre el fondo
+        self.layout_centro.addWidget(
+            self.barra_titulo, 0, 0, Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight
+        )
 
         self._armar_contenido()
         self.input_usuario.setFocus()
 
     def resizeEvent(self, event):
         """Ajusta el fondo al tamano de la ventana en cada cambio de tamano."""
-        self.label_fondo.setGeometry(0, 0, self.width(), self.height())
         self.central.setGeometry(0, 0, self.width(), self.height())
         super().resizeEvent(event)
 
@@ -226,8 +256,7 @@ class VentanaLogin(QMainWindow):
             QLineEdit:focus { border: 1px solid #3a3a5a; }
             QLineEdit::placeholder { color: #444444; }
         """)
-        if os.path.exists(ICONO_USER):
-            self.input_usuario.addAction(QIcon(ICONO_USER), QLineEdit.ActionPosition.LeadingPosition)
+        self.input_usuario.addAction(_icono_usuario(), QLineEdit.ActionPosition.LeadingPosition)
 
         bloque_usuario.addWidget(label_usuario)
         bloque_usuario.addWidget(self.input_usuario)
@@ -258,8 +287,7 @@ class VentanaLogin(QMainWindow):
             QLineEdit:focus { border: 1px solid #3a3a5a; }
             QLineEdit::placeholder { color: #444444; }
         """)
-        if os.path.exists(ICONO_LOCK):
-            self.input_clave.addAction(QIcon(ICONO_LOCK), QLineEdit.ActionPosition.LeadingPosition)
+        self.input_clave.addAction(_icono_candado(), QLineEdit.ActionPosition.LeadingPosition)
 
         bloque_clave.addWidget(label_clave)
         bloque_clave.addWidget(self.input_clave)
@@ -298,7 +326,13 @@ class VentanaLogin(QMainWindow):
 
         if resultado.ok:
             usuario = resultado.datos
-            QMessageBox.information(self, "Bienvenido", f"Hola {usuario['nombre']} ({usuario['rol']})")
+
+            # Abrimos el dashboard ANTES de cerrar el login, para que
+            # la app no se cierre sola al quedarse sin ventanas visibles.
+            from interfaz.dashboard import VentanaPrincipal
+            self.ventana_principal = VentanaPrincipal(usuario)
+            self.ventana_principal.show()
+
             self.close()
         else:
             QMessageBox.critical(self, "Error de login", resultado.mensaje)

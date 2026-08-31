@@ -109,3 +109,31 @@ def listar_asistencias_de_alumno(
             ORDER BY a.fecha DESC, m.nombre
         """, (alumno_numero, fecha_desde, fecha_hasta))
         return [dict(fila) for fila in cursor.fetchall()]
+
+
+def listar_asistencia_de_curso(
+    curso_id: int,
+    materia_id: int,
+    fecha: str
+) -> list[dict]:
+    """
+    Devuelve todos los alumnos activos de un curso, con su estado de
+    asistencia (si ya fue cargado) para una materia y fecha dadas.
+    Si el alumno todavia no tiene asistencia cargada ese dia, 'estado'
+    viene como None (la interfaz lo trata como 'presente' por defecto).
+    Pensada para poblar la pantalla de "tomar asistencia".
+    """
+    with conexion() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT al.numero, al.nombre, al.apellido,
+                   a.estado, a.observaciones
+            FROM alumno al
+            LEFT JOIN asistencia a
+                ON a.alumno_numero = al.numero
+                AND a.materia_id = ?
+                AND a.fecha = ?
+            WHERE al.curso_id = ? AND al.activo = 1
+            ORDER BY al.apellido, al.nombre
+        """, (materia_id, fecha, curso_id))
+        return [dict(fila) for fila in cursor.fetchall()]
