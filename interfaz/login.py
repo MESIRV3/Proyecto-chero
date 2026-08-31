@@ -10,8 +10,6 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QPoint, QSize
 from PySide6.QtGui import QPixmap, QFont, QColor, QIcon, QMouseEvent
 
-from database import resultado
-
 
 
 def resource_path(relative_path):
@@ -310,10 +308,19 @@ class VentanaLogin(QMainWindow):
                 "carpeta que el ejecutable (o que database/asistencia.db "
                 "exista, si estas corriendo desde el codigo fuente)."
             )
-            return      
+            return
+
         if resultado.ok:
             usuario = resultado.datos
-            QMessageBox.information(self, "Bienvenido", f"Hola {usuario['nombre']} ({usuario['rol']})")
+            if usuario["rol"] == "admin":
+                from interfaz.admin import VentanaAdmin
+                # Se guarda en self, si no la ventana se destruye apenas
+                # termina esta funcion (Python la borraria de memoria al no
+                # tener ninguna referencia) y se cerraria sola de inmediato.
+                self.ventana_admin = VentanaAdmin()
+                self.ventana_admin.show()
+            else:
+                QMessageBox.information(self, "Bienvenido", f"Hola {usuario['nombre']} ({usuario['rol']})")
             self.close()
         else:
             QMessageBox.critical(self, "Error de login", resultado.mensaje)

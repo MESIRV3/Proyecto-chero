@@ -173,6 +173,10 @@
    'C:\\Users\\FliaSerapio\\Desktop\\Proyectos-de-Martin\\Proyecto '
    'chero\\asistencia_escolar\\interfaz\\__init__.py',
    'PYMODULE'),
+  ('interfaz.admin',
+   'C:\\Users\\FliaSerapio\\Desktop\\Proyectos-de-Martin\\Proyecto '
+   'chero\\asistencia_escolar\\interfaz\\admin.py',
+   'PYMODULE'),
   ('interfaz.login',
    'C:\\Users\\FliaSerapio\\Desktop\\Proyectos-de-Martin\\Proyecto '
    'chero\\asistencia_escolar\\interfaz\\login.py',
@@ -199,6 +203,18 @@
   ('servicios',
    'C:\\Users\\FliaSerapio\\Desktop\\Proyectos-de-Martin\\Proyecto '
    'chero\\asistencia_escolar\\servicios\\__init__.py',
+   'PYMODULE'),
+  ('servicios.alumno',
+   'C:\\Users\\FliaSerapio\\Desktop\\Proyectos-de-Martin\\Proyecto '
+   'chero\\asistencia_escolar\\servicios\\alumno.py',
+   'PYMODULE'),
+  ('servicios.ciclo_lectivo',
+   'C:\\Users\\FliaSerapio\\Desktop\\Proyectos-de-Martin\\Proyecto '
+   'chero\\asistencia_escolar\\servicios\\ciclo_lectivo.py',
+   'PYMODULE'),
+  ('servicios.curso',
+   'C:\\Users\\FliaSerapio\\Desktop\\Proyectos-de-Martin\\Proyecto '
+   'chero\\asistencia_escolar\\servicios\\curso.py',
    'PYMODULE'),
   ('servicios.usuario',
    'C:\\Users\\FliaSerapio\\Desktop\\Proyectos-de-Martin\\Proyecto '
