@@ -9,8 +9,10 @@ def cargar_datos():
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
 
-
+    # ============================================
     # LIMPIAR DATOS PREVIOS (por si se corre varias veces)
+    # ============================================
+
     tablas = [
         "justificacion", "asistencia", "lista_diaria",
         "horario", "materia", "alumno", "usuario",
@@ -20,19 +22,25 @@ def cargar_datos():
         cursor.execute(f"DELETE FROM {tabla}")
         cursor.execute(f"DELETE FROM sqlite_sequence WHERE name='{tabla}'")
 
+    # ============================================
     # 1. CICLO LECTIVO
+    # ============================================
+
     cursor.execute("""
         INSERT INTO ciclo_lectivo (anio, fecha_inicio, fecha_fin)
         VALUES (?, ?, ?)
     """, (2026, "2026-03-01", "2026-12-15"))
     ciclo_id = cursor.lastrowid
 
+    # ============================================
     # 2. CURSOS
+    # ============================================
+
     cursos = [
         (1, "1", "manana"),
         (1, "2", "manana"),
         (5, "1", "manana"),
-    ]   
+    ]
     cursos_ids = []
     for anio, division, turno in cursos:
         cursor.execute("""
@@ -41,7 +49,9 @@ def cargar_datos():
         """, (ciclo_id, anio, division, turno))
         cursos_ids.append(cursor.lastrowid)
 
+    # ============================================
     # 3. USUARIOS
+    # ============================================
 
     # En produccion las contraseñas van hasheadas con bcrypt.
     # Para datos de prueba usamos un placeholder.
@@ -61,20 +71,29 @@ def cargar_datos():
         """, (nombre, apellido, username, password, rol))
         usuarios_ids.append(cursor.lastrowid)
 
-    # 4. MATERIAS (para 5°A)
+    # ============================================
+    # 4. MATERIAS (para todos los cursos)
+    # ============================================
 
     materias = ["Ingles", "Matematicas", "Lengua", "Historia", "Educacion Fisica"]
-    materia_ids = []
-    for nombre in materias:
-        cursor.execute("""
-            INSERT INTO materia (nombre, curso_id)
-            VALUES (?, ?)
-        """, (nombre, cursos_ids[2]))  # 5°A
-        materia_ids.append(cursor.lastrowid)
+    materia_ids_por_curso = {}
 
+    for curso_id in cursos_ids:
+        ids_materias = []
+        for nombre in materias:
+            cursor.execute("""
+                INSERT INTO materia (nombre, curso_id)
+                VALUES (?, ?)
+            """, (nombre, curso_id))
+            ids_materias.append(cursor.lastrowid)
+        materia_ids_por_curso[curso_id] = ids_materias
 
+    # Se sigue usando para armar el horario de ejemplo (5°A)
+    materia_ids = materia_ids_por_curso[cursos_ids[2]]
+
+    # ============================================
     # 5. HORARIO (la grilla semanal de 5°A, lunes)
-  
+    # ============================================
     # Recreos tienen materia_id NULL, usuario_id NULL, es_recreo=1
     # Clases tienen materia_id y usuario_id, es_recreo=0
     horario_5a_lunes = [
@@ -100,8 +119,9 @@ def cargar_datos():
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """, (cursos_ids[2], 1, bloque, inicio, fin, recreo, mat_id, usr_id))
 
+    # ============================================
     # 6. ALUMNOS (10 de 5°A, 10 de 5°B, 10 de 1°A)
-
+    # ============================================
     nombres = ["Juan", "Sofia", "Mateo", "Valentina", "Lucas",
                "Camila", "Tomas", "Isabella", "Diego", "Martina"]
     apellidos = ["Lopez", "Martinez", "Garcia", "Rodriguez", "Fernandez",
@@ -122,8 +142,9 @@ def cargar_datos():
             ))
             alumno_numero += 1
 
+    # ============================================
     # 7. DIAS HABILES (marzo a junio 2026, lunes a viernes)
-
+    # ============================================
     inicio = date(2026, 3, 1)
     fin = date(2026, 6, 30)
     actual = inicio
@@ -140,13 +161,13 @@ def cargar_datos():
     conn.close()
 
     print("Datos de prueba cargados:")
-    print(f"  - 1 ciclo lectivo (2026)")
-    print(f"  - 3 cursos (1°A, 1°B, 5°A)")
-    print(f"  - 4 usuarios (1 preceptor, 2 profes, 1 directivo)")
-    print(f"  - 5 materias (de 5°A)")
-    print(f"  - 10 bloques de horario (lunes de 5°A)")
-    print(f"  - 30 alumnos (10 por curso)")
-    print(f"  - Dias habiles de marzo a junio 2026")
+    print("  - 1 ciclo lectivo (2026)")
+    print("  - 3 cursos (1°A, 1°B, 5°A)")
+    print("  - 4 usuarios (1 preceptor, 2 profes, 1 directivo)")
+    print("  - 5 materias por cada curso")
+    print("  - 10 bloques de horario (lunes de 5°A)")
+    print("  - 30 alumnos (10 por curso)")
+    print("  - Dias habiles de marzo a junio 2026")
 
 
 if __name__ == "__main__":
