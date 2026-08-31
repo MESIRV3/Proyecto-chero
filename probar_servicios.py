@@ -75,7 +75,6 @@ def probar_servicios():
         obs = f" ({a['observaciones']})" if a['observaciones'] else ""
         print(f"   {a['fecha']} | {a['materia']:12s} | {a['estado']}{obs}")
 
-
     print("\nServicios funcionando correctamente.")
 
 

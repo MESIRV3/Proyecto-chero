@@ -1,4 +1,6 @@
 """Clase para devolver resultados de operaciones de forma uniforme."""
+
+
 class Resultado:
     """
     Representa el resultado de una operacion.

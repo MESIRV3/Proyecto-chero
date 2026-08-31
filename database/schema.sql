@@ -1,8 +1,11 @@
+-- =============================================
 -- ESQUEMA DE LA BASE DE DATOS
 -- Sistema de Asistencia Escolar
+-- =============================================
 
-
+-- =============================================
 -- CICLO LECTIVO
+-- =============================================
 CREATE TABLE ciclo_lectivo (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
     anio         INTEGER NOT NULL UNIQUE,
@@ -10,7 +13,9 @@ CREATE TABLE ciclo_lectivo (
     fecha_fin    DATE    NOT NULL
 );
 
+-- =============================================
 -- CURSO
+-- =============================================
 CREATE TABLE curso (
     id       INTEGER PRIMARY KEY AUTOINCREMENT,
     ciclo_id INTEGER NOT NULL,
@@ -21,8 +26,9 @@ CREATE TABLE curso (
     FOREIGN KEY (ciclo_id) REFERENCES ciclo_lectivo(id)
 );
 
-
+-- =============================================
 -- ALUMNO
+-- =============================================
 CREATE TABLE alumno (
     numero   INTEGER PRIMARY KEY,
     nombre   TEXT    NOT NULL,
@@ -33,8 +39,9 @@ CREATE TABLE alumno (
     FOREIGN KEY (curso_id) REFERENCES curso(id)
 );
 
-
+-- =============================================
 -- MATERIA
+-- =============================================
 CREATE TABLE materia (
     id       INTEGER PRIMARY KEY AUTOINCREMENT,
     nombre   TEXT    NOT NULL,
@@ -42,7 +49,9 @@ CREATE TABLE materia (
     FOREIGN KEY (curso_id) REFERENCES curso(id)
 );
 
+-- =============================================
 -- USUARIO
+-- =============================================
 CREATE TABLE usuario (
     id       INTEGER PRIMARY KEY AUTOINCREMENT,
     nombre   TEXT    NOT NULL,
@@ -54,8 +63,9 @@ CREATE TABLE usuario (
     activo   BOOLEAN DEFAULT 1
 );
 
-
+-- =============================================
 -- HORARIO (la grilla semanal)
+-- =============================================
 CREATE TABLE horario (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     curso_id      INTEGER NOT NULL,
@@ -93,8 +103,9 @@ CREATE TABLE lista_diaria (
     UNIQUE(alumno_numero, fecha)
 );
 
-
+-- =============================================
 -- ASISTENCIA (la del profesor, por materia por dia)
+-- =============================================
 CREATE TABLE asistencia (
     id             INTEGER PRIMARY KEY AUTOINCREMENT,
     alumno_numero  INTEGER NOT NULL,
@@ -110,7 +121,9 @@ CREATE TABLE asistencia (
     UNIQUE(alumno_numero, materia_id, fecha)
 );
 
+-- =============================================
 -- JUSTIFICACION
+-- =============================================
 CREATE TABLE justificacion (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     lista_diaria_id INTEGER,
@@ -128,8 +141,9 @@ CREATE TABLE justificacion (
     )
 );
 
-
+-- =============================================
 -- DIA_HABIL
+-- =============================================
 CREATE TABLE dia_habil (
     fecha     DATE    PRIMARY KEY,
     es_habil  BOOLEAN NOT NULL,
