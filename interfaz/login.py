@@ -10,6 +10,8 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QPoint, QSize
 from PySide6.QtGui import QPixmap, QFont, QColor, QIcon, QMouseEvent
 
+from database import resultado
+
 
 
 def resource_path(relative_path):
@@ -294,8 +296,21 @@ class VentanaLogin(QMainWindow):
             QMessageBox.warning(self, "Faltan datos", "Ingresa usuario y contrasena")
             return
 
-        resultado = autenticar(username, password)
-
+        try:
+            resultado = autenticar(username, password)
+        except Exception as e:
+            # Si esto no estuviera, un error de base de datos (por ejemplo
+            # que no exista asistencia.db) hace que el boton "no haga nada":
+            # la excepcion queda silenciada por Qt y no se ve ningun cartel.
+            QMessageBox.critical(
+                self,
+                "Error inesperado",
+                f"Ocurrio un error al intentar iniciar sesion:\n\n{e}\n\n"
+                "Verifica que el archivo asistencia.db este en la misma "
+                "carpeta que el ejecutable (o que database/asistencia.db "
+                "exista, si estas corriendo desde el codigo fuente)."
+            )
+            return      
         if resultado.ok:
             usuario = resultado.datos
             QMessageBox.information(self, "Bienvenido", f"Hola {usuario['nombre']} ({usuario['rol']})")

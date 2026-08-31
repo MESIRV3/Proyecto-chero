@@ -28,17 +28,21 @@ def cargar_datos():
     ciclo_id = cursor.lastrowid
 
     # 2. CURSOS
+    # division numerica (1°1, 1°2, 1°3...) como se usa en la escuela real.
+    # turno "Manana"/"Tarde" (mayuscula) para que sea consistente con lo que
+    # valida servicios/curso.py. 1er anio va sin especialidad; 5to (a partir
+    # de 3ro) esta obligado a tener una.
     cursos = [
-        (1, "1", "manana"),
-        (1, "2", "manana"),
-        (5, "1", "manana"),
-    ]   
+        (1, "1", "Manana", None),
+        (1, "2", "Manana", None),
+        (5, "1", "Manana", "Computacion"),
+    ]
     cursos_ids = []
-    for anio, division, turno in cursos:
+    for anio, division, turno, especialidad in cursos:
         cursor.execute("""
-            INSERT INTO curso (ciclo_id, anio, division, turno)
-            VALUES (?, ?, ?, ?)
-        """, (ciclo_id, anio, division, turno))
+            INSERT INTO curso (ciclo_id, anio, division, especialidad, turno)
+            VALUES (?, ?, ?, ?, ?)
+        """, (ciclo_id, anio, division, especialidad, turno))
         cursos_ids.append(cursor.lastrowid)
 
     # 3. USUARIOS
@@ -51,6 +55,7 @@ def cargar_datos():
         ("Carlos",  "Perez",    "cperez",    "hash_pendiente", "profesor"),
         ("Laura",   "Diaz",     "ldiaz",     "hash_pendiente", "profesor"),
         ("Roberto", "Sosa",     "rsosa",     "hash_pendiente", "directivo"),
+        ("Super",   "Admin",    "admin",     "admin123",       "admin"),
     ]
 
     usuarios_ids = []
@@ -61,7 +66,7 @@ def cargar_datos():
         """, (nombre, apellido, username, password, rol))
         usuarios_ids.append(cursor.lastrowid)
 
-    # 4. MATERIAS (para 5°A)
+    # 4. MATERIAS (para 5°1)
 
     materias = ["Ingles", "Matematicas", "Lengua", "Historia", "Educacion Fisica"]
     materia_ids = []
@@ -69,11 +74,11 @@ def cargar_datos():
         cursor.execute("""
             INSERT INTO materia (nombre, curso_id)
             VALUES (?, ?)
-        """, (nombre, cursos_ids[2]))  # 5°A
+        """, (nombre, cursos_ids[2]))  # 5°1
         materia_ids.append(cursor.lastrowid)
 
 
-    # 5. HORARIO (la grilla semanal de 5°A, lunes)
+    # 5. HORARIO (la grilla semanal de 5°1, lunes)
   
     # Recreos tienen materia_id NULL, usuario_id NULL, es_recreo=1
     # Clases tienen materia_id y usuario_id, es_recreo=0
@@ -100,7 +105,7 @@ def cargar_datos():
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """, (cursos_ids[2], 1, bloque, inicio, fin, recreo, mat_id, usr_id))
 
-    # 6. ALUMNOS (10 de 5°A, 10 de 5°B, 10 de 1°A)
+    # 6. ALUMNOS (10 de 1°1, 10 de 1°2, 10 de 5°1)
 
     nombres = ["Juan", "Sofia", "Mateo", "Valentina", "Lucas",
                "Camila", "Tomas", "Isabella", "Diego", "Martina"]
@@ -141,12 +146,14 @@ def cargar_datos():
 
     print("Datos de prueba cargados:")
     print(f"  - 1 ciclo lectivo (2026)")
-    print(f"  - 3 cursos (1°A, 1°B, 5°A)")
-    print(f"  - 4 usuarios (1 preceptor, 2 profes, 1 directivo)")
-    print(f"  - 5 materias (de 5°A)")
-    print(f"  - 10 bloques de horario (lunes de 5°A)")
+    print(f"  - 3 cursos (1°1, 1°2, 5°1)")
+    print(f"  - 5 usuarios (1 preceptor, 2 profes, 1 directivo, 1 admin)")
+    print(f"  - 5 materias (de 5°1)")
+    print(f"  - 10 bloques de horario (lunes de 5°1)")
     print(f"  - 30 alumnos (10 por curso)")
     print(f"  - Dias habiles de marzo a junio 2026")
+    print()
+    print("  Usuario admin de prueba -> username: admin / password: admin123")
 
 
 if __name__ == "__main__":

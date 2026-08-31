@@ -11,13 +11,17 @@ CREATE TABLE ciclo_lectivo (
 );
 
 -- CURSO
+-- especialidad queda NULL para 1er y 2do anio (todavia no se especializan).
+-- A partir de 3er anio, especialidad es 'Computacion' o 'GAO'.
+-- La validacion de esta regla se hace en servicios/curso.py, no aca en el schema.
 CREATE TABLE curso (
-    id       INTEGER PRIMARY KEY AUTOINCREMENT,
-    ciclo_id INTEGER NOT NULL,
-    anio     INTEGER NOT NULL,
-    division TEXT    NOT NULL,
-    turno    TEXT    NOT NULL,
-    UNIQUE(ciclo_id, anio, division, turno),
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    ciclo_id     INTEGER NOT NULL,
+    anio         INTEGER NOT NULL,
+    division     TEXT    NOT NULL,
+    especialidad TEXT,
+    turno        TEXT    NOT NULL,
+    UNIQUE(ciclo_id, anio, division, especialidad, turno),
     FOREIGN KEY (ciclo_id) REFERENCES ciclo_lectivo(id)
 );
 
