@@ -23,14 +23,58 @@ from PySide6.QtWidgets import (
     QTableWidgetItem, QComboBox, QMessageBox, QHeaderView, QCheckBox,
     QAbstractItemView
 )
-from PySide6.QtCore import Qt, QPoint
-from PySide6.QtGui import QFont
+from PySide6.QtCore import Qt, QPoint, QRegularExpression
+from PySide6.QtGui import QFont, QRegularExpressionValidator
 
 from servicios import curso as servicio_curso
 from servicios import alumno as servicio_alumno
 from servicios import ciclo_lectivo as servicio_ciclo
 
 FUENTE_MONO = "Courier New"
+
+# Paises de America con la cantidad maxima de digitos de su documento
+# de identidad nacional. OJO: son valores aproximados/orientativos (no
+# saque esto de una fuente oficial pais por pais) pensados para que el
+# campo DNI no te deje escribir de mas segun la nacionalidad elegida.
+# Si para algun pais en particular sabes el numero exacto, cambialo aca
+# nomas, es el unico lugar donde estan definidos.
+NACIONALIDADES = {
+    "Antigua y Barbuda": 9,
+    "Argentina": 8,
+    "Bahamas": 9,
+    "Barbados": 9,
+    "Belice": 9,
+    "Bolivia": 8,
+    "Brasil": 11,
+    "Canadá": 9,
+    "Chile": 9,
+    "Colombia": 10,
+    "Costa Rica": 9,
+    "Cuba": 11,
+    "Dominica": 9,
+    "Ecuador": 10,
+    "El Salvador": 9,
+    "Estados Unidos": 9,
+    "Granada": 9,
+    "Guatemala": 13,
+    "Guyana": 9,
+    "Haití": 9,
+    "Honduras": 13,
+    "Jamaica": 9,
+    "México": 18,
+    "Nicaragua": 14,
+    "Panamá": 9,
+    "Paraguay": 8,
+    "Perú": 8,
+    "República Dominicana": 11,
+    "San Cristóbal y Nieves": 9,
+    "San Vicente y las Granadinas": 9,
+    "Santa Lucía": 9,
+    "Surinam": 9,
+    "Trinidad y Tobago": 9,
+    "Uruguay": 8,
+    "Venezuela": 8,
+}
 
 COLOR_FONDO = "#0b0b0d"
 COLOR_TARJETA = "rgba(255, 255, 255, 0.04)"
@@ -116,6 +160,21 @@ def _etiqueta(texto: str, tenue: bool = False) -> QLabel:
     return label
 
 
+def _validador_solo_letras() -> QRegularExpressionValidator:
+    """Letras (con acentos y ñ) y espacios, para nombre/apellido."""
+    return QRegularExpressionValidator(QRegularExpression(r"^[A-Za-zÁÉÍÓÚÜáéíóúüÑñ ]*$"))
+
+
+def _validador_solo_numeros() -> QRegularExpressionValidator:
+    """Solo digitos, para DNI y numero de legajo."""
+    return QRegularExpressionValidator(QRegularExpression(r"^[0-9]*$"))
+
+
+def _validador_division() -> QRegularExpressionValidator:
+    """Un solo digito del 1 al 9 (o vacio mientras se esta escribiendo)."""
+    return QRegularExpressionValidator(QRegularExpression(r"^[1-9]?$"))
+
+
 class PanelCursos(QWidget):
     """Alta, listado y baja de cursos."""
 
@@ -149,8 +208,9 @@ class PanelCursos(QWidget):
         col_division = QVBoxLayout()
         col_division.addWidget(_etiqueta("Division", tenue=True))
         self.input_division = QLineEdit()
-        self.input_division.setPlaceholderText("A, B, C...")
-        self.input_division.setMaxLength(5)
+        self.input_division.setPlaceholderText("1-9")
+        self.input_division.setMaxLength(1)
+        self.input_division.setValidator(_validador_division())
         self.input_division.setStyleSheet(_estilo_input())
         col_division.addWidget(self.input_division)
         form.addLayout(col_division)
@@ -168,7 +228,7 @@ class PanelCursos(QWidget):
         col_turno = QVBoxLayout()
         col_turno.addWidget(_etiqueta("Turno", tenue=True))
         self.combo_turno = QComboBox()
-        self.combo_turno.addItems(["Manana", "Tarde"])
+        self.combo_turno.addItems(["Mañana", "Tarde"])
         self.combo_turno.setStyleSheet(_estilo_input())
         col_turno.addWidget(self.combo_turno)
         form.addLayout(col_turno)
@@ -284,66 +344,7 @@ class PanelAlumnos(QWidget):
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(16)
 
-        # --- Formulario de alta ---
-        tarjeta_form = _tarjeta()
-        form = QVBoxLayout(tarjeta_form)
-        form.setContentsMargins(20, 16, 20, 16)
-        form.setSpacing(10)
-
-        fila1 = QHBoxLayout()
-        fila1.setSpacing(12)
-
-        col_numero = QVBoxLayout()
-        col_numero.addWidget(_etiqueta("Numero de legajo", tenue=True))
-        self.input_numero = QLineEdit()
-        self.input_numero.setPlaceholderText("Ej: 1024")
-        self.input_numero.setStyleSheet(_estilo_input())
-        col_numero.addWidget(self.input_numero)
-        fila1.addLayout(col_numero)
-
-        col_dni = QVBoxLayout()
-        col_dni.addWidget(_etiqueta("DNI (opcional)", tenue=True))
-        self.input_dni = QLineEdit()
-        self.input_dni.setPlaceholderText("Ej: 40123456")
-        self.input_dni.setStyleSheet(_estilo_input())
-        col_dni.addWidget(self.input_dni)
-        fila1.addLayout(col_dni)
-        form.addLayout(fila1)
-
-        fila2 = QHBoxLayout()
-        fila2.setSpacing(12)
-
-        col_nombre = QVBoxLayout()
-        col_nombre.addWidget(_etiqueta("Nombre", tenue=True))
-        self.input_nombre = QLineEdit()
-        self.input_nombre.setStyleSheet(_estilo_input())
-        col_nombre.addWidget(self.input_nombre)
-        fila2.addLayout(col_nombre)
-
-        col_apellido = QVBoxLayout()
-        col_apellido.addWidget(_etiqueta("Apellido", tenue=True))
-        self.input_apellido = QLineEdit()
-        self.input_apellido.setStyleSheet(_estilo_input())
-        col_apellido.addWidget(self.input_apellido)
-        fila2.addLayout(col_apellido)
-
-        col_curso = QVBoxLayout()
-        col_curso.addWidget(_etiqueta("Curso", tenue=True))
-        self.combo_curso_alta = QComboBox()
-        self.combo_curso_alta.setStyleSheet(_estilo_input())
-        col_curso.addWidget(self.combo_curso_alta)
-        fila2.addLayout(col_curso)
-        form.addLayout(fila2)
-
-        self.btn_agregar = QPushButton("+ Agregar alumno")
-        self.btn_agregar.setCursor(Qt.PointingHandCursor)
-        self.btn_agregar.setStyleSheet(_estilo_boton())
-        self.btn_agregar.clicked.connect(self._agregar_alumno)
-        form.addWidget(self.btn_agregar, alignment=Qt.AlignRight)
-
-        layout.addWidget(tarjeta_form)
-
-        # --- Filtro ---
+        # --- Filtro (arriba de todo, la tabla es lo principal de esta pantalla) ---
         fila_filtro = QHBoxLayout()
         fila_filtro.addWidget(_etiqueta("Ver curso:", tenue=True))
         self.combo_curso_filtro = QComboBox()
@@ -357,21 +358,110 @@ class PanelAlumnos(QWidget):
         fila_filtro.addWidget(self.check_inactivos)
         layout.addLayout(fila_filtro)
 
-        # --- Tabla de alumnos ---
-        self.tabla = QTableWidget(0, 6)
+        # --- Tabla de alumnos (ocupa todo el espacio que el formulario deja libre) ---
+        self.tabla = QTableWidget(0, 7)
         self.tabla.setHorizontalHeaderLabels(
-            ["Numero", "Apellido", "Nombre", "DNI", "Estado", "Curso ID"]
+            ["Numero", "Apellido", "Nombre", "DNI", "Nacionalidad", "Estado", "Curso ID"]
         )
-        self.tabla.setColumnHidden(5, True)
+        self.tabla.setColumnHidden(6, True)
         self.tabla.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.tabla.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.tabla.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.tabla.setAlternatingRowColors(True)
         self.tabla.setStyleSheet(_estilo_tabla())
-        layout.addWidget(self.tabla)
+        layout.addWidget(self.tabla, stretch=1)
 
-        # --- Acciones sobre el seleccionado ---
+        # --- Formulario de alta (arranca oculto; se muestra con el boton "+ Agregar alumno") ---
+        self.tarjeta_form = _tarjeta()
+        form = QVBoxLayout(self.tarjeta_form)
+        form.setContentsMargins(20, 16, 20, 16)
+        form.setSpacing(10)
+
+        fila1 = QHBoxLayout()
+        fila1.setSpacing(12)
+
+        col_numero = QVBoxLayout()
+        col_numero.addWidget(_etiqueta("Numero de legajo", tenue=True))
+        self.input_numero = QLineEdit()
+        self.input_numero.setPlaceholderText("Ej: 1024")
+        self.input_numero.setValidator(_validador_solo_numeros())
+        self.input_numero.setStyleSheet(_estilo_input())
+        col_numero.addWidget(self.input_numero)
+        fila1.addLayout(col_numero)
+
+        col_dni = QVBoxLayout()
+        col_dni.addWidget(_etiqueta("DNI (opcional)", tenue=True))
+        self.input_dni = QLineEdit()
+        self.input_dni.setPlaceholderText("Ej: 40123456")
+        self.input_dni.setValidator(_validador_solo_numeros())
+        self.input_dni.setStyleSheet(_estilo_input())
+        col_dni.addWidget(self.input_dni)
+        fila1.addLayout(col_dni)
+        form.addLayout(fila1)
+
+        fila2 = QHBoxLayout()
+        fila2.setSpacing(12)
+
+        col_nombre = QVBoxLayout()
+        col_nombre.addWidget(_etiqueta("Nombre", tenue=True))
+        self.input_nombre = QLineEdit()
+        self.input_nombre.setValidator(_validador_solo_letras())
+        self.input_nombre.setStyleSheet(_estilo_input())
+        col_nombre.addWidget(self.input_nombre)
+        fila2.addLayout(col_nombre)
+
+        col_apellido = QVBoxLayout()
+        col_apellido.addWidget(_etiqueta("Apellido", tenue=True))
+        self.input_apellido = QLineEdit()
+        self.input_apellido.setValidator(_validador_solo_letras())
+        self.input_apellido.setStyleSheet(_estilo_input())
+        col_apellido.addWidget(self.input_apellido)
+        fila2.addLayout(col_apellido)
+        form.addLayout(fila2)
+
+        fila3 = QHBoxLayout()
+        fila3.setSpacing(12)
+
+        col_nacionalidad = QVBoxLayout()
+        col_nacionalidad.addWidget(_etiqueta("Nacionalidad", tenue=True))
+        self.combo_nacionalidad = QComboBox()
+        for pais in sorted(NACIONALIDADES.keys()):
+            self.combo_nacionalidad.addItem(pais)
+        indice_argentina = self.combo_nacionalidad.findText("Argentina")
+        if indice_argentina >= 0:
+            self.combo_nacionalidad.setCurrentIndex(indice_argentina)
+        self.combo_nacionalidad.currentTextChanged.connect(self._actualizar_maximo_dni)
+        self.combo_nacionalidad.setStyleSheet(_estilo_input())
+        col_nacionalidad.addWidget(self.combo_nacionalidad)
+        fila3.addLayout(col_nacionalidad)
+
+        col_curso = QVBoxLayout()
+        col_curso.addWidget(_etiqueta("Curso", tenue=True))
+        self.combo_curso_alta = QComboBox()
+        self.combo_curso_alta.setStyleSheet(_estilo_input())
+        col_curso.addWidget(self.combo_curso_alta)
+        fila3.addLayout(col_curso)
+        form.addLayout(fila3)
+
+        self.btn_agregar = QPushButton("Guardar alumno")
+        self.btn_agregar.setCursor(Qt.PointingHandCursor)
+        self.btn_agregar.setStyleSheet(_estilo_boton())
+        self.btn_agregar.clicked.connect(self._agregar_alumno)
+        form.addWidget(self.btn_agregar, alignment=Qt.AlignRight)
+
+        self.tarjeta_form.hide()
+        layout.addWidget(self.tarjeta_form)
+        self._actualizar_maximo_dni(self.combo_nacionalidad.currentText())
+
+        # --- Acciones sobre el seleccionado (aca vive el boton para abrir el alta) ---
         fila_acciones = QHBoxLayout()
+
+        self.btn_toggle_alta = QPushButton("+ Agregar alumno")
+        self.btn_toggle_alta.setCursor(Qt.PointingHandCursor)
+        self.btn_toggle_alta.setStyleSheet(_estilo_boton())
+        self.btn_toggle_alta.clicked.connect(self._alternar_formulario_alta)
+        fila_acciones.addWidget(self.btn_toggle_alta)
+
         self.btn_baja = QPushButton("Dar de baja")
         self.btn_baja.setCursor(Qt.PointingHandCursor)
         self.btn_baja.setStyleSheet(_estilo_boton(COLOR_PELIGRO, COLOR_PELIGRO_HOVER))
@@ -395,6 +485,19 @@ class PanelAlumnos(QWidget):
         fila_acciones.addWidget(self.btn_mover)
 
         layout.addLayout(fila_acciones)
+
+    def _actualizar_maximo_dni(self, pais: str):
+        """Ajusta cuantos digitos se pueden escribir en DNI segun la nacionalidad elegida."""
+        maximo = NACIONALIDADES.get(pais, 12)
+        self.input_dni.setMaxLength(maximo)
+        if len(self.input_dni.text()) > maximo:
+            self.input_dni.setText(self.input_dni.text()[:maximo])
+
+    def _alternar_formulario_alta(self):
+        """Muestra u oculta el formulario de alta de alumno."""
+        mostrar = not self.tarjeta_form.isVisible()
+        self.tarjeta_form.setVisible(mostrar)
+        self.btn_toggle_alta.setText("Cancelar" if mostrar else "+ Agregar alumno")
 
     def recargar_cursos(self):
         """Vuelve a cargar los combos de curso (llamar despues de agregar/eliminar un curso)."""
@@ -432,12 +535,14 @@ class PanelAlumnos(QWidget):
             apellido=self.input_apellido.text(),
             curso_id=curso_id,
             dni=self.input_dni.text(),
+            nacionalidad=self.combo_nacionalidad.currentText(),
         )
         if resultado.ok:
             self.input_numero.clear()
             self.input_dni.clear()
             self.input_nombre.clear()
             self.input_apellido.clear()
+            self._alternar_formulario_alta()  # lo vuelve a ocultar
             self.recargar_tabla()
         else:
             QMessageBox.warning(self, "No se pudo agregar el alumno", resultado.mensaje)
@@ -456,7 +561,7 @@ class PanelAlumnos(QWidget):
             estado = "Activo" if a["activo"] else "De baja"
             valores = [
                 str(a["numero"]), a["apellido"], a["nombre"],
-                a["dni"] or "-", estado, str(a["curso_id"]),
+                a["dni"] or "-", a["nacionalidad"] or "-", estado, str(a["curso_id"]),
             ]
             for col, valor in enumerate(valores):
                 self.tabla.setItem(fila, col, QTableWidgetItem(valor))

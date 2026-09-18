@@ -33,9 +33,9 @@ def cargar_datos():
     # valida servicios/curso.py. 1er anio va sin especialidad; 5to (a partir
     # de 3ro) esta obligado a tener una.
     cursos = [
-        (1, "1", "Manana", None),
-        (1, "2", "Manana", None),
-        (5, "1", "Manana", "Computacion"),
+        (1, "1", "Mañana", None),
+        (1, "2", "Mañana", None),
+        (5, "1", "Mañana", "Computacion"),
     ]
     cursos_ids = []
     for anio, division, turno, especialidad in cursos:
@@ -116,13 +116,14 @@ def cargar_datos():
     for i in range(10):
         for curso_id in cursos_ids:
             cursor.execute("""
-                INSERT INTO alumno (numero, nombre, apellido, dni, curso_id)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO alumno (numero, nombre, apellido, dni, nacionalidad, curso_id)
+                VALUES (?, ?, ?, ?, ?, ?)
             """, (
                 alumno_numero,
                 nombres[i],
                 apellidos[i],
                 f"{(alumno_numero % 100000000):08d}",
+                "Argentina",
                 curso_id
             ))
             alumno_numero += 1

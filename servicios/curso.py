@@ -7,7 +7,7 @@ from database.resultado import Resultado
 ANIOS_SIN_ESPECIALIDAD = (1, 2)
 ANIOS_CON_ESPECIALIDAD = (3, 4, 5, 6)
 ESPECIALIDADES_VALIDAS = ("Computacion", "GAO")
-TURNOS_VALIDOS = ("Manana", "Tarde")
+TURNOS_VALIDOS = ("Mañana", "Tarde")
 
 NOMBRES_ESPECIALIDAD = {
     "Computacion": "Computacion",
@@ -50,7 +50,7 @@ def agregar_curso(ciclo_id: int, anio: int, division: str, turno: str, especiali
                 INSERT INTO curso (ciclo_id, anio, division, especialidad, turno)
                 VALUES (?, ?, ?, ?, ?)
                 """,
-                (ciclo_id, anio, division.strip().upper(), especialidad, turno),
+                (ciclo_id, anio, division.strip(), especialidad, turno),
             )
             nuevo_id = cursor.lastrowid
         return Resultado.exito("Curso creado correctamente", datos=nuevo_id)

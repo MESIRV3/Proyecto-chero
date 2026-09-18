@@ -297,16 +297,10 @@ class VentanaLogin(QMainWindow):
         try:
             resultado = autenticar(username, password)
         except Exception as e:
-            # Si esto no estuviera, un error de base de datos (por ejemplo
-            # que no exista asistencia.db) hace que el boton "no haga nada":
-            # la excepcion queda silenciada por Qt y no se ve ningun cartel.
             QMessageBox.critical(
                 self,
                 "Error inesperado",
                 f"Ocurrio un error al intentar iniciar sesion:\n\n{e}\n\n"
-                "Verifica que el archivo asistencia.db este en la misma "
-                "carpeta que el ejecutable (o que database/asistencia.db "
-                "exista, si estas corriendo desde el codigo fuente)."
             )
             return
 
@@ -314,9 +308,6 @@ class VentanaLogin(QMainWindow):
             usuario = resultado.datos
             if usuario["rol"] == "admin":
                 from interfaz.admin import VentanaAdmin
-                # Se guarda en self, si no la ventana se destruye apenas
-                # termina esta funcion (Python la borraria de memoria al no
-                # tener ninguna referencia) y se cerraria sola de inmediato.
                 self.ventana_admin = VentanaAdmin()
                 self.ventana_admin.show()
             else:

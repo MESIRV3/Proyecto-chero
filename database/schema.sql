@@ -28,12 +28,13 @@ CREATE TABLE curso (
 
 -- ALUMNO
 CREATE TABLE alumno (
-    numero   INTEGER PRIMARY KEY,
-    nombre   TEXT    NOT NULL,
-    apellido TEXT    NOT NULL,
-    dni      TEXT    UNIQUE,
-    curso_id INTEGER NOT NULL,
-    activo   BOOLEAN DEFAULT 1,
+    numero       INTEGER PRIMARY KEY,
+    nombre       TEXT    NOT NULL,
+    apellido     TEXT    NOT NULL,
+    dni          TEXT    UNIQUE,
+    nacionalidad TEXT,
+    curso_id     INTEGER NOT NULL,
+    activo       BOOLEAN DEFAULT 1,
     FOREIGN KEY (curso_id) REFERENCES curso(id)
 );
 

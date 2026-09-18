@@ -15,7 +15,7 @@ def listar_alumnos_de_curso(curso_id: int) -> list[dict]:
     with conexion() as conn:
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT numero, nombre, apellido, dni
+            SELECT numero, nombre, apellido, dni, nacionalidad
             FROM alumno
             WHERE curso_id = ? AND activo = 1
             ORDER BY apellido, nombre
@@ -28,7 +28,7 @@ def obtener_alumno(numero: int) -> dict | None:
     with conexion() as conn:
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT numero, nombre, apellido, dni, curso_id, activo
+            SELECT numero, nombre, apellido, dni, nacionalidad, curso_id, activo
             FROM alumno
             WHERE numero = ?
         """, (numero,))
@@ -63,7 +63,7 @@ def listar_cursos() -> list[dict]:
 # GESTION (usadas por el panel de administrador)
 # =====================================================================
 
-def agregar_alumno(numero: int, nombre: str, apellido: str, curso_id: int, dni: str = None):
+def agregar_alumno(numero: int, nombre: str, apellido: str, curso_id: int, dni: str = None, nacionalidad: str = None):
     """Da de alta un alumno nuevo. El numero de legajo es la clave primaria (lo define el usuario)."""
     if not numero:
         return Resultado.error("El numero de legajo es obligatorio")
@@ -75,6 +75,7 @@ def agregar_alumno(numero: int, nombre: str, apellido: str, curso_id: int, dni: 
         return Resultado.error("Hay que asignar un curso")
 
     dni = dni.strip() if dni else None
+    nacionalidad = nacionalidad.strip() if nacionalidad else None
 
     try:
         with conexion() as conn:
@@ -85,10 +86,10 @@ def agregar_alumno(numero: int, nombre: str, apellido: str, curso_id: int, dni: 
 
             cursor.execute(
                 """
-                INSERT INTO alumno (numero, nombre, apellido, dni, curso_id, activo)
-                VALUES (?, ?, ?, ?, ?, 1)
+                INSERT INTO alumno (numero, nombre, apellido, dni, nacionalidad, curso_id, activo)
+                VALUES (?, ?, ?, ?, ?, ?, 1)
                 """,
-                (numero, nombre.strip(), apellido.strip(), dni, curso_id),
+                (numero, nombre.strip(), apellido.strip(), dni, nacionalidad, curso_id),
             )
         return Resultado.exito("Alumno agregado correctamente", datos=numero)
     except Exception as e:
