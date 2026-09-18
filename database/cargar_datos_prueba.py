@@ -1,7 +1,12 @@
 """Carga datos de prueba en la base de datos."""
 import sqlite3
+import sys
 from pathlib import Path
 from datetime import date, timedelta
+
+# Asegurar importacion de servicios desde el root del proyecto
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from servicios.usuario import hashear_password
 
 
 def cargar_datos():
@@ -23,8 +28,8 @@ def cargar_datos():
     # 1. CICLO LECTIVO
     cursor.execute("""
         INSERT INTO ciclo_lectivo (anio, fecha_inicio, fecha_fin)
-        VALUES (?, ?, ?)
-    """, (2026, "2026-03-01", "2026-12-15"))
+        VALUES (2026, '2026-03-02', '2026-12-18')
+    """)
     ciclo_id = cursor.lastrowid
 
     # 2. CURSOS
@@ -45,17 +50,13 @@ def cargar_datos():
         """, (ciclo_id, anio, division, especialidad, turno))
         cursos_ids.append(cursor.lastrowid)
 
-    # 3. USUARIOS
-
-    # En produccion las contraseñas van hasheadas con bcrypt.
-    # Para datos de prueba usamos un placeholder.
-
+    # 3. USUARIOS (con contrasenas hasheadas mediante bcrypt)
     usuarios = [
-        ("Maria",   "Gonzalez", "mgonzalez", "hash_pendiente", "preceptor"),
-        ("Carlos",  "Perez",    "cperez",    "hash_pendiente", "profesor"),
-        ("Laura",   "Diaz",     "ldiaz",     "hash_pendiente", "profesor"),
-        ("Roberto", "Sosa",     "rsosa",     "hash_pendiente", "directivo"),
-        ("Super",   "Admin",    "admin",     "admin123",       "admin"),
+        ("Maria",   "Gonzalez", "mgonzalez", hashear_password("preceptor123"), "preceptor"),
+        ("Carlos",  "Perez",    "cperez",    hashear_password("profesor123"),  "profesor"),
+        ("Laura",   "Diaz",     "ldiaz",     hashear_password("profesor123"),  "profesor"),
+        ("Roberto", "Sosa",     "rsosa",     hashear_password("directivo123"), "directivo"),
+        ("Super",   "Admin",    "admin",     hashear_password("admin123"),     "admin"),
     ]
 
     usuarios_ids = []
