@@ -16,19 +16,37 @@ Como abrirlo desde login.py, despues de un login exitoso:
             self.ventana_admin.show()
         self.close()
 """
+import os
 import sys
+from pathlib import Path
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QLineEdit, QPushButton, QFrame, QTabWidget, QTableWidget,
     QTableWidgetItem, QComboBox, QMessageBox, QHeaderView, QCheckBox,
     QAbstractItemView
 )
-from PySide6.QtCore import Qt, QPoint, QRegularExpression
-from PySide6.QtGui import QFont, QRegularExpressionValidator
+from PySide6.QtCore import Qt, QPoint, QSize, QRegularExpression
+from PySide6.QtGui import QFont, QIcon, QRegularExpressionValidator
 
 from servicios import curso as servicio_curso
 from servicios import alumno as servicio_alumno
 from servicios import ciclo_lectivo as servicio_ciclo
+
+
+def resource_path(relative_path):
+    """Devuelve la ruta de un recurso, tanto en desarrollo como en PyInstaller."""
+    if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+        base_path = Path(sys._MEIPASS)
+    else:
+        base_path = Path(__file__).resolve().parent.parent
+    return str(base_path / relative_path)
+
+
+# RUTAS DE ASSETS (iconos de control de ventana compartidos)
+ASSETS_PATH = resource_path(os.path.join("assets", "login"))
+ICONO_MINIMIZAR = os.path.join(ASSETS_PATH, "minimize.png")
+ICONO_MAXIMIZAR = os.path.join(ASSETS_PATH, "maximize.png")
+ICONO_CERRAR = os.path.join(ASSETS_PATH, "close.png")
 
 FUENTE_MONO = "Courier New"
 
@@ -616,7 +634,7 @@ class VentanaAdmin(QMainWindow):
         self.setWindowTitle("Panel de Administrador")
         self.setMinimumSize(1000, 650)
         self.resize(1200, 750)
-        self.setWindowFlags(Qt.FramelessWindowHint)
+        self.setWindowFlags(Qt.Window | Qt.FramelessWindowHint | Qt.WindowMinMaxButtonsHint)
 
         self.dragging = False
         self.drag_offset = QPoint()
@@ -682,46 +700,76 @@ class VentanaAdmin(QMainWindow):
                 background-color: #ffffff;
                 border: none;
                 border-radius: 12px;
+                padding: 4px;
             }
             QPushButton:hover { background-color: #e5e5e5; }
+            QPushButton:pressed { background-color: #cccccc; }
+        """
+        estilo_btn_cerrar = """
+            QPushButton {
+                background-color: #ffffff;
+                border: none;
+                border-radius: 12px;
+                padding: 4px;
+            }
+            QPushButton:hover { background-color: #ff5c5c; }
+            QPushButton:pressed { background-color: #e04848; }
         """
 
-        btn_minimizar = QPushButton("_")
-        btn_minimizar.setFixedSize(24, 24)
-        btn_minimizar.setCursor(Qt.PointingHandCursor)
-        btn_minimizar.setStyleSheet(estilo_btn_ventana)
-        btn_minimizar.clicked.connect(self.showMinimized)
+        self.btn_minimizar = QPushButton(barra)
+        self.btn_minimizar.setFixedSize(24, 24)
+        self.btn_minimizar.setCursor(Qt.PointingHandCursor)
+        self.btn_minimizar.setToolTip("Minimizar")
+        self.btn_minimizar.setIcon(QIcon(ICONO_MINIMIZAR))
+        self.btn_minimizar.setIconSize(QSize(14, 14))
+        self.btn_minimizar.setStyleSheet(estilo_btn_ventana)
+        self.btn_minimizar.clicked.connect(self.showMinimized)
 
-        btn_maximizar = QPushButton("[ ]")
-        btn_maximizar.setFixedSize(24, 24)
-        btn_maximizar.setCursor(Qt.PointingHandCursor)
-        btn_maximizar.setStyleSheet(estilo_btn_ventana)
-        btn_maximizar.clicked.connect(self._alternar_maximizar)
+        self.btn_maximizar = QPushButton(barra)
+        self.btn_maximizar.setFixedSize(24, 24)
+        self.btn_maximizar.setCursor(Qt.PointingHandCursor)
+        self.btn_maximizar.setToolTip("Maximizar")
+        self.btn_maximizar.setIcon(QIcon(ICONO_MAXIMIZAR))
+        self.btn_maximizar.setIconSize(QSize(14, 14))
+        self.btn_maximizar.setStyleSheet(estilo_btn_ventana)
+        self.btn_maximizar.clicked.connect(self._alternar_maximizar)
 
-        btn_cerrar = QPushButton("X")
-        btn_cerrar.setFixedSize(24, 24)
-        btn_cerrar.setCursor(Qt.PointingHandCursor)
-        btn_cerrar.setStyleSheet(estilo_btn_ventana)
-        btn_cerrar.clicked.connect(self.close)
+        self.btn_cerrar = QPushButton(barra)
+        self.btn_cerrar.setFixedSize(24, 24)
+        self.btn_cerrar.setCursor(Qt.PointingHandCursor)
+        self.btn_cerrar.setToolTip("Cerrar")
+        self.btn_cerrar.setIcon(QIcon(ICONO_CERRAR))
+        self.btn_cerrar.setIconSize(QSize(14, 14))
+        self.btn_cerrar.setStyleSheet(estilo_btn_cerrar)
+        self.btn_cerrar.clicked.connect(self._cerrar_aplicacion)
 
-        layout.addWidget(btn_minimizar)
-        layout.addWidget(btn_maximizar)
-        layout.addWidget(btn_cerrar)
+        layout.addWidget(self.btn_minimizar)
+        layout.addWidget(self.btn_maximizar)
+        layout.addWidget(self.btn_cerrar)
 
         barra.mousePressEvent = self._barra_mouse_press
         barra.mouseMoveEvent = self._barra_mouse_move
         barra.mouseReleaseEvent = self._barra_mouse_release
+        barra.mouseDoubleClickEvent = self._barra_mouse_double_click
 
         return barra
 
     def _alternar_maximizar(self):
         if self.isMaximized():
             self.showNormal()
+            self.btn_maximizar.setToolTip("Maximizar")
         else:
             self.showMaximized()
+            self.btn_maximizar.setToolTip("Restaurar")
+
+    def _cerrar_aplicacion(self):
+        self.close()
+        app = QApplication.instance()
+        if app:
+            app.quit()
 
     def _barra_mouse_press(self, event):
-        if event.button() == Qt.LeftButton:
+        if event.button() == Qt.LeftButton and not self.isMaximized():
             self.dragging = True
             self.drag_offset = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
             event.accept()
@@ -734,6 +782,11 @@ class VentanaAdmin(QMainWindow):
     def _barra_mouse_release(self, event):
         if event.button() == Qt.LeftButton:
             self.dragging = False
+
+    def _barra_mouse_double_click(self, event):
+        if event.button() == Qt.LeftButton:
+            self._alternar_maximizar()
+            event.accept()
 
 
 if __name__ == "__main__":
