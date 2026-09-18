@@ -3,7 +3,7 @@ import os
 import sys
 from pathlib import Path
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel,
+    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel,
     QLineEdit, QPushButton, QFrame, QMainWindow,
     QGraphicsDropShadowEffect, QMessageBox
 )
@@ -38,8 +38,9 @@ class VentanaLogin(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Sistema de Asistencia - Login")
-        self.setFixedSize(1280, 720)
-        self.setWindowFlags(Qt.FramelessWindowHint)
+        self.setMinimumSize(960, 540)
+        self.resize(1200, 700)
+        self.setWindowFlags(Qt.Window | Qt.FramelessWindowHint | Qt.WindowMinMaxButtonsHint)
         self.setAttribute(Qt.WA_TranslucentBackground, False)
 
         # Para arrastrar la ventana
@@ -48,20 +49,85 @@ class VentanaLogin(QMainWindow):
 
         # Widget central
         self.central = QWidget(self)
-        self.central.setGeometry(0, 0, 1280, 720)
         self.setCentralWidget(self.central)
 
-        # Layout para centrar la tarjeta automaticamente
-        self.layout_centro = QGridLayout(self.central)
-        self.layout_centro.setContentsMargins(0, 0, 0, 0)
-        self.layout_centro.setSpacing(0)
-
-        # Fondo (se ajusta en resizeEvent)
+        # Fondo (se dimensiona en resizeEvent y se manda al fondo)
         self.label_fondo = QLabel(self.central)
         self.label_fondo.setScaledContents(True)
-        self.label_fondo.setGeometry(0, 0, 1280, 720)
 
-        # Tarjeta (se centra sola con el grid layout)
+        # Layout vertical principal sobre central
+        layout_central = QVBoxLayout(self.central)
+        layout_central.setContentsMargins(0, 0, 0, 0)
+        layout_central.setSpacing(0)
+
+        # Barra de titulo con botones (arriba de todo)
+        self.barra_titulo = QWidget(self.central)
+        self.barra_titulo.setFixedHeight(40)
+        self.barra_titulo.setStyleSheet("background: transparent;")
+
+        layout_barra = QHBoxLayout(self.barra_titulo)
+        layout_barra.setContentsMargins(15, 8, 15, 0)
+        layout_barra.setSpacing(8)
+        layout_barra.addStretch()
+
+        estilo_btn = """
+            QPushButton {
+                background-color: #ffffff;
+                border: none;
+                border-radius: 12px;
+                padding: 4px;
+            }
+            QPushButton:hover { background-color: #e5e5e5; }
+            QPushButton:pressed { background-color: #cccccc; }
+        """
+        estilo_btn_cerrar = """
+            QPushButton {
+                background-color: #ffffff;
+                border: none;
+                border-radius: 12px;
+                padding: 4px;
+            }
+            QPushButton:hover { background-color: #ff5c5c; }
+            QPushButton:pressed { background-color: #e04848; }
+        """
+
+        # Boton minimizar
+        self.btn_minimizar = QPushButton(self.barra_titulo)
+        self.btn_minimizar.setFixedSize(24, 24)
+        self.btn_minimizar.setCursor(Qt.PointingHandCursor)
+        self.btn_minimizar.setToolTip("Minimizar")
+        self.btn_minimizar.setIcon(QIcon(ICONO_MINIMIZAR))
+        self.btn_minimizar.setIconSize(QSize(14, 14))
+        self.btn_minimizar.setStyleSheet(estilo_btn)
+        self.btn_minimizar.clicked.connect(self.showMinimized)
+
+        # Boton maximizar / restaurar (agrandar / achicar)
+        self.btn_maximizar = QPushButton(self.barra_titulo)
+        self.btn_maximizar.setFixedSize(24, 24)
+        self.btn_maximizar.setCursor(Qt.PointingHandCursor)
+        self.btn_maximizar.setToolTip("Maximizar")
+        self.btn_maximizar.setIcon(QIcon(ICONO_MAXIMIZAR))
+        self.btn_maximizar.setIconSize(QSize(14, 14))
+        self.btn_maximizar.setStyleSheet(estilo_btn)
+        self.btn_maximizar.clicked.connect(self._alternar_maximizar)
+
+        # Boton cerrar
+        self.btn_cerrar = QPushButton(self.barra_titulo)
+        self.btn_cerrar.setFixedSize(24, 24)
+        self.btn_cerrar.setCursor(Qt.PointingHandCursor)
+        self.btn_cerrar.setToolTip("Cerrar")
+        self.btn_cerrar.setIcon(QIcon(ICONO_CERRAR))
+        self.btn_cerrar.setIconSize(QSize(14, 14))
+        self.btn_cerrar.setStyleSheet(estilo_btn_cerrar)
+        self.btn_cerrar.clicked.connect(self._cerrar_aplicacion)
+
+        layout_barra.addWidget(self.btn_minimizar)
+        layout_barra.addWidget(self.btn_maximizar)
+        layout_barra.addWidget(self.btn_cerrar)
+
+        layout_central.addWidget(self.barra_titulo)
+
+        # Tarjeta de login (centrada en el area restante)
         self.tarjeta = QFrame(self.central)
         self.tarjeta.setFixedSize(440, 540)
         self.tarjeta.setStyleSheet("""
@@ -76,81 +142,10 @@ class VentanaLogin(QMainWindow):
         sombra.setOffset(0, 8)
         self.tarjeta.setGraphicsEffect(sombra)
 
-        self.layout_centro.addWidget(self.tarjeta, 0, 0, Qt.AlignmentFlag.AlignCenter)
-
-        # Barra de titulo con botones (arriba a la derecha)
-        self.barra_titulo = QWidget(self.central)
-        self.barra_titulo.setFixedHeight(40)
-        self.barra_titulo.setStyleSheet("background: transparent;")
-        self.barra_titulo.setAttribute(Qt.WA_TranslucentBackground, False)
-
-        layout_barra = QHBoxLayout(self.barra_titulo)
-        layout_barra.setContentsMargins(0, 5, 10, 0)
-        layout_barra.setSpacing(8)
-
-        layout_barra.addStretch()
-
-        # Boton minimizar
-        self.btn_minimizar = QPushButton(self.barra_titulo)
-        self.btn_minimizar.setFixedSize(24, 24)
-        self.btn_minimizar.setCursor(Qt.PointingHandCursor)
-        self.btn_minimizar.setIcon(QIcon(ICONO_MINIMIZAR))
-        self.btn_minimizar.setIconSize(QSize(14, 14))
-        self.btn_minimizar.setStyleSheet("""
-            QPushButton {
-                background-color: #ffffff;
-                border: none;
-                border-radius: 12px;
-                padding: 4px;
-            }
-            QPushButton:hover { background-color: #e5e5e5; }
-        """)
-        self.btn_minimizar.clicked.connect(self.showMinimized)
-
-        # Boton maximizar
-        self.btn_maximizar = QPushButton(self.barra_titulo)
-        self.btn_maximizar.setFixedSize(24, 24)
-        self.btn_maximizar.setCursor(Qt.PointingHandCursor)
-        self.btn_maximizar.setIcon(QIcon(ICONO_MAXIMIZAR))
-        self.btn_maximizar.setIconSize(QSize(14, 14))
-        self.btn_maximizar.setStyleSheet("""
-            QPushButton {
-                background-color: #ffffff;
-                border: none;
-                border-radius: 12px;
-                padding: 4px;
-            }
-            QPushButton:hover { background-color: #e5e5e5; }
-        """)
-        self.btn_maximizar.clicked.connect(self._alternar_maximizar)
-
-        # Boton cerrar
-        self.btn_cerrar = QPushButton(self.barra_titulo)
-        self.btn_cerrar.setFixedSize(24, 24)
-        self.btn_cerrar.setCursor(Qt.PointingHandCursor)
-        self.btn_cerrar.setIcon(QIcon(ICONO_CERRAR))
-        self.btn_cerrar.setIconSize(QSize(14, 14))
-        self.btn_cerrar.setStyleSheet("""
-            QPushButton {
-                background-color: #ffffff;
-                border: none;
-                border-radius: 12px;
-                padding: 4px;
-            }
-            QPushButton:hover { background-color: #e5e5e5; }
-        """)
-        self.btn_cerrar.clicked.connect(self.close)
-
-        layout_barra.addWidget(self.btn_minimizar)
-        layout_barra.addWidget(self.btn_maximizar)
-        layout_barra.addWidget(self.btn_cerrar)
-
-        # La barra va en un layout superior sobre el fondo
-        self.layout_fondo = QGridLayout(self.label_fondo)
-        self.layout_fondo.setContentsMargins(0, 0, 0, 0)
-        self.layout_fondo.setSpacing(0)
-        # Encimar: barra arriba a la derecha sobre el fondo
-        self.layout_fondo.addWidget(self.barra_titulo, 0, 0, Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight)
+        layout_centro = QGridLayout()
+        layout_centro.setContentsMargins(0, 0, 0, 0)
+        layout_centro.addWidget(self.tarjeta, 0, 0, Qt.AlignmentFlag.AlignCenter)
+        layout_central.addLayout(layout_centro, stretch=1)
 
         # Cargar imagen de fondo
         if os.path.exists(FONDO_PATH):
@@ -160,23 +155,37 @@ class VentanaLogin(QMainWindow):
         self.input_usuario.setFocus()
 
     def resizeEvent(self, event):
-        """Ajusta el fondo al tamano de la ventana en cada cambio de tamano."""
-        self.label_fondo.setGeometry(0, 0, self.width(), self.height())
-        self.central.setGeometry(0, 0, self.width(), self.height())
+        """Ajusta el fondo al tamano de la ventana y mantiene el z-order correcto."""
         super().resizeEvent(event)
+        self.label_fondo.setGeometry(0, 0, self.width(), self.height())
+        self.label_fondo.lower()
+        self.barra_titulo.raise_()
 
     def _alternar_maximizar(self):
+        """Alterna entre pantalla completa y tamano normal (agrandar / achicar)."""
         if self.isMaximized():
             self.showNormal()
+            self.btn_maximizar.setToolTip("Maximizar")
         else:
             self.showMaximized()
+            self.btn_maximizar.setToolTip("Restaurar")
+
+    def _cerrar_aplicacion(self):
+        """Cierra la ventana y asegura terminar el proceso de forma limpia."""
+        self.close()
+        app = QApplication.instance()
+        if app:
+            app.quit()
 
     def mousePressEvent(self, event):
-        """Inicia el arrastre si se hace clic en la barra de titulo."""
+        """Inicia el arrastre solo si se hace clic fuera del formulario de login."""
         if event.button() == Qt.LeftButton:
-            self.dragging = True
-            self.drag_offset = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
-            event.accept()
+            pos = event.position().toPoint()
+            pos_en_central = self.central.mapFrom(self, pos)
+            if not self.isMaximized() and not self.tarjeta.geometry().contains(pos_en_central):
+                self.dragging = True
+                self.drag_offset = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+                event.accept()
 
     def mouseMoveEvent(self, event):
         """Mueve la ventana mientras se arrastra."""
@@ -188,6 +197,12 @@ class VentanaLogin(QMainWindow):
         """Detiene el arrastre."""
         if event.button() == Qt.LeftButton:
             self.dragging = False
+
+    def mouseDoubleClickEvent(self, event):
+        """Doble clic en la zona superior alterna maximizar / restaurar."""
+        if event.button() == Qt.LeftButton and event.position().y() <= 45:
+            self._alternar_maximizar()
+            event.accept()
 
     def _armar_contenido(self):
         # Layout principal de la tarjeta
