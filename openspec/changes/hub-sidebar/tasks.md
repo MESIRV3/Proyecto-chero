@@ -21,8 +21,8 @@ Delivery strategy: ask-always (el orquestador pregunta antes de apply).
 
 ## Fase 1: Servicios — STRICT TDD (RED → GREEN)
 
-- [ ] 1.1 (RED) `tests/test_dashboard.py` NEW (~150 l.): SQLite temporal con `executescript(schema.sql)` + `mock.patch("database.conexion.DB_PATH")` (D2); 2 ciclos sembrados (curso→materia→asistencia; hoy−7 dentro, hoy−8 fuera). Casos: 6 claves ≥0; scoping excluye otro ciclo; ciclo inexistente/`None` → ceros + año actual; `conexion` con `side_effect` → `Resultado.error`. **Verifica**: `python -m unittest tests.test_dashboard` falla contra código actual. Cubre HD-R1+R2. Dep: —.
-- [ ] 1.2 (GREEN) `servicios/dashboard.py` MODIFY (~15 l.): JOIN `asistencia→materia→curso WHERE cu.ciclo_id=?` en asistencias (D1); firma/claves intactas. `git add servicios/dashboard.py` (incorporación deliberada; `generate_files.py` intocable). **Verifica**: `python -m unittest discover -s tests` exit 0. Cubre HD-R1+R2. Dep: 1.1.
+- [x] 1.1 (RED) `tests/test_dashboard.py` NEW (~150 l.): SQLite temporal con `executescript(schema.sql)` + `mock.patch("database.conexion.DB_PATH")` (D2); 2 ciclos sembrados (curso→materia→asistencia; hoy−7 dentro, hoy−8 fuera). Casos: 6 claves ≥0; scoping excluye otro ciclo; ciclo inexistente/`None` → ceros + año actual; `conexion` con `side_effect` → `Resultado.error`. **Verifica**: `python -m unittest tests.test_dashboard` falla contra código actual. Cubre HD-R1+R2. Dep: —.
+- [x] 1.2 (GREEN) `servicios/dashboard.py` MODIFY (~15 l.): JOIN `asistencia→materia→curso WHERE cu.ciclo_id=?` en asistencias (D1); firma/claves intactas. `git add servicios/dashboard.py` (incorporación deliberada; `generate_files.py` intocable). **Verifica**: `python -m unittest discover -s tests` exit 0. Cubre HD-R1+R2. Dep: 1.1.
 
 ## Fase 2: Estilos compartidos (D6)
 
