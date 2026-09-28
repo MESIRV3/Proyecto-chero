@@ -18,7 +18,6 @@ from PySide6.QtWidgets import (
 
 from interfaz.estilos import (
     COLOR_TEXTO,
-    COLOR_TEXTO_TENUE,
     FUENTE_MONO,
     _estilo_boton,
     _estilo_tabla,
@@ -49,7 +48,7 @@ class PanelHub(QWidget):
 
         # Mensaje de error inline (no modal)
         self.label_error = QLabel()
-        self.label_error.setStyleSheet(f"color: #ff5c5c; padding: 8px 4px;")
+        self.label_error.setStyleSheet("color: #ff5c5c; padding: 8px 4px;")
         self.label_error.hide()
         layout.addWidget(self.label_error)
 
