@@ -31,7 +31,7 @@ Delivery strategy: ask-always (el orquestador pregunta antes de apply).
 ## Fase 3: Paneles nuevos (GUI — verificación manual)
 
 - [x] 3.1 `interfaz/hub.py` NEW `PanelHub(ciclo_id)` (~150 l., D7): banner `ciclo_anio`; KPIs con `_tarjeta()` (activos, baja, cursos, hoy, semana); señales `navegar_a_alumnos`/`navegar_a_cursos`; tabla `listar_cursos(ciclo_id)`; carga en `showEvent`; `ok=False` → QLabel inline sin modal/crash. **Verifica**: items 2–4 de 5.1. Cubre HD-R3. Dep: 1.2, 2.1.
-- [ ] 3.2 `interfaz/asistencia_preview.py` NEW `PanelAsistencia(ciclo_id)` (~120 l., D8): combo `listar_alumnos(solo_activos=True)`; `QDateEdit` hoy−30/hoy; `listar_asistencias_de_alumno` (lista cruda → try/except visible) en tabla Fecha/Materia/Estado/Observaciones; estado vacío; badge "Vista preliminar". **Verifica**: items 5–6 de 5.1. Cubre AP-R11. Dep: 2.1.
+- [x] 3.2 `interfaz/asistencia_preview.py` NEW `PanelAsistencia(ciclo_id)` (~120 l., D8): combo `listar_alumnos(solo_activos=True)`; `QDateEdit` hoy−30/hoy; `listar_asistencias_de_alumno` (lista cruda → try/except visible) en tabla Fecha/Materia/Estado/Observaciones; estado vacío; badge "Vista preliminar". **Verifica**: items 5–6 de 5.1. Cubre AP-R11. Dep: 2.1.
 
 ## Fase 4: Integración admin + login
 
