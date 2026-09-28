@@ -35,13 +35,9 @@ from servicios import ciclo_lectivo as servicio_ciclo
 from interfaz.estilos import (
     FUENTE_MONO,
     COLOR_FONDO,
-    COLOR_TARJETA,
     COLOR_BORDE,
     COLOR_TEXTO,
     COLOR_TEXTO_TENUE,
-    COLOR_INPUT,
-    COLOR_ACENTO,
-    COLOR_ACENTO_HOVER,
     COLOR_PELIGRO,
     COLOR_PELIGRO_HOVER,
     _estilo_input,
