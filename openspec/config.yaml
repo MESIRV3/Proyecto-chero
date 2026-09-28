@@ -1,0 +1,46 @@
+schema: spec-driven
+
+context: |
+  Proyecto: asistencia_escolar (school attendance desktop app) — clave Engram "proyecto-chero".
+  Stack: Python 3.14 + PySide6 6.11 (GUI desktop), SQLite (stdlib sqlite3), bcrypt 5.0, unittest.
+  Arquitectura (clean/hexagonal): interfaz/ (vistas Qt) -> servicios/ (logica Qt-free) -> database/ (conexion + Resultado).
+  Regla dura: servicios/ y database/ NUNCA importan PySide6/Qt (verificado: 0 imports Qt).
+  Contrato: toda operacion publica de servicio devuelve database.resultado.Resultado (.exito/.error con datos).
+  Contexto hub-sidebar: interfaz/admin.py usa QTabWidget (addTab Cursos/Alumnos); servicios/dashboard.py ya expone obtener_metricas_hub(ciclo_id)->Resultado.
+  Entrada app: main.py -> VentanaLogin (interfaz/login.py).
+
+strict_tdd: true
+
+testing:
+  runner: unittest
+  command: "python -m unittest discover -s tests"
+  framework: "unittest (stdlib)"
+  verified: "2026-09-18 — 3 tests OK, exit 0, headless (servicios Qt-free)"
+  layers:
+    unit: true
+    integration: false
+    e2e: false
+  coverage: false
+  linter: false
+  type_checker: false
+  formatter: false
+  database_strategy: "real database/asistencia.db — NO fixtures/mock; tests depende de seed data (admin/admin123). Mantener la BD hermetica al crecer la suite."
+  note: "No hay pytest, ruff, mypy ni black instalados; no hay pyproject/requirements/setup.cfg. Solo unittest de stdlib."
+
+rules:
+  proposal:
+    - "Include a rollback plan for risky UI changes"
+  specs:
+    - "Use Given/When/Then for scenarios"
+    - "Use RFC 2119 keywords (MUST, SHALL, SHOULD, MAY)"
+  design:
+    - "Document architecture decisions with rationale"
+    - "Respect clean-architecture rule: UI (interfaz/) depends on servicios/, never the reverse"
+  tasks:
+    - "Group by phase, use hierarchical numbering"
+  apply:
+    - "Follow existing patterns: servicios stay Qt-free and return Resultado; UI reads Resultado.datos"
+  verify:
+    - "Run python -m unittest discover -s tests; service tests MUST pass headless"
+  archive:
+    - "Warn before merging destructive deltas"
