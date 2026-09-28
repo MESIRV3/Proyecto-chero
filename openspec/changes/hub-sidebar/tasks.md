@@ -26,7 +26,7 @@ Delivery strategy: ask-always (el orquestador pregunta antes de apply).
 
 ## Fase 2: Estilos compartidos (D6)
 
-- [ ] 2.1 `interfaz/estilos.py` NEW (~95 l.): mover verbatim `FUENTE_MONO`, `COLOR_*`, `_estilo_*`/`_tarjeta`/`_etiqueta` de admin.py L51–178; admin re-importa (+3/−90) → paneles byte-idénticos, sin circulares. **Verifica**: suite exit 0 + `python main.py` igual que antes. Habilita HD-R3, AP-R8/R9. Dep: —.
+- [x] 2.1 `interfaz/estilos.py` NEW (~95 l.): mover verbatim `FUENTE_MONO`, `COLOR_*`, `_estilo_*`/`_tarjeta`/`_etiqueta` de admin.py L51–178; admin re-importa (+3/−90) → paneles byte-idénticos, sin circulares. **Verifica**: suite exit 0 + `python main.py` igual que antes. Habilita HD-R3, AP-R8/R9. Dep: —.
 
 ## Fase 3: Paneles nuevos (GUI — verificación manual)
 
