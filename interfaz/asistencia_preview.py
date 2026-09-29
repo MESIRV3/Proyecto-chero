@@ -36,7 +36,10 @@ class PanelAsistencia(QWidget):
         super().__init__()
         self.ciclo_id = ciclo_id
         self._armar_ui()
-        self._recargar_alumnos()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self.recargar_alumnos()
 
     def _armar_ui(self):
         layout = QVBoxLayout(self)
@@ -110,7 +113,8 @@ class PanelAsistencia(QWidget):
         self.tabla.setStyleSheet(_estilo_tabla())
         layout.addWidget(self.tabla, stretch=1)
 
-    def _recargar_alumnos(self):
+    def recargar_alumnos(self):
+        numero_actual = self.combo_alumnos.currentData()
         self.combo_alumnos.clear()
         self.combo_alumnos.addItem("Selecciona un alumno...", None)
 
@@ -127,6 +131,11 @@ class PanelAsistencia(QWidget):
             texto = f"{alumno.get('apellido', '')}, {alumno.get('nombre', '')} ({alumno['numero']})"
             self.combo_alumnos.addItem(texto, alumno["numero"])
 
+        if numero_actual is not None:
+            indice = self.combo_alumnos.findData(numero_actual)
+            if indice >= 0:
+                self.combo_alumnos.setCurrentIndex(indice)
+
         self._mostrar_mensaje(
             "Selecciona un alumno y un rango de fechas para consultar.",
             es_error=False,
@@ -142,13 +151,23 @@ class PanelAsistencia(QWidget):
         fecha_desde = self.date_desde.date().toString("yyyy-MM-dd")
         fecha_hasta = self.date_hasta.date().toString("yyyy-MM-dd")
 
+        if self.date_desde.date() > self.date_hasta.date():
+            self.tabla.setRowCount(0)
+            self._mostrar_mensaje(
+                "La fecha 'Desde' no puede ser posterior a 'Hasta'.", es_error=True
+            )
+            return
+
         try:
             registros = listar_asistencias_de_alumno(numero, fecha_desde, fecha_hasta)
         except Exception as e:
             self.tabla.setRowCount(0)
             self._mostrar_mensaje(
-                f"Error al consultar asistencias: {e}", es_error=True
+                "No pudimos cargar las asistencias. "
+                "Revisá el rango de fechas e intentá de nuevo.",
+                es_error=True,
             )
+            self.label_mensaje.setToolTip(str(e))
             return
 
         self.tabla.setRowCount(len(registros))
