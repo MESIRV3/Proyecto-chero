@@ -37,7 +37,7 @@ Delivery strategy: ask-always (el orquestador pregunta antes de apply).
 
 - [x] 4.1 `interfaz/admin.py` MODIFY (~115 l., D3+D5): `VentanaAdmin(usuario=None)`; QTabWidget L660–681 → QHBoxLayout [sidebar 220px: branding, 4 botones checkable, footer usuario (`None`→"Sesión local") + "Cerrar sesión" | `QStackedWidget` 0 Hub/1 Cursos/2 Alumnos/3 Asistencia]; cable `idClicked`⇄`currentChanged` (grupo exclusivo); preservar ciclo L652–658 y `on_cambio`. **Verifica**: items 1, 7–10 de 5.1. Cubre SN-R4/R5/R6, AP-R7/R8/R10. Dep: 2.1, 3.1, 3.2.
 - [x] 4.2 `interfaz/admin.py` MODIFY (~15 l., D4): `_cerrar_sesion()` — import local `VentanaLogin`, ref en `self.ventana_login`, `mostrar()`, `self.close()`; NUNCA `app.quit()`. **Verifica**: items 11–12 de 5.1. Cubre SN-R6. Dep: 4.1.
-- [ ] 4.3 `interfaz/login.py` MODIFY (L326, ~4 l.): `VentanaAdmin(usuario=usuario)` con `resultado.datos`. **Verifica**: item 1 de 5.1. Cubre SN-R6. Dep: 4.1.
+- [x] 4.3 `interfaz/login.py` MODIFY (L326, ~4 l.): `VentanaAdmin(usuario=usuario)` con `resultado.datos`. **Verifica**: item 1 de 5.1. Cubre SN-R6. Dep: 4.1.
 
 ## Fase 5: Verificación (19/19 escenarios)
 

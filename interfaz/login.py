@@ -323,7 +323,7 @@ class VentanaLogin(QMainWindow):
             usuario = resultado.datos
             if usuario["rol"] == "admin":
                 from interfaz.admin import VentanaAdmin
-                self.ventana_admin = VentanaAdmin()
+                self.ventana_admin = VentanaAdmin(usuario=usuario)
                 self.ventana_admin.show()
             else:
                 QMessageBox.information(self, "Bienvenido", f"Hola {usuario['nombre']} ({usuario['rol']})")
