@@ -5,7 +5,6 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QAbstractItemView,
-    QGridLayout,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -84,8 +83,11 @@ class PanelHub(QWidget):
         layout.addLayout(fila_acciones)
 
         # --- KPIs ---
-        self.grid_kpi = QGridLayout()
-        self.grid_kpi.setSpacing(12)
+        self.fila_kpi_1 = QHBoxLayout()
+        self.fila_kpi_1.setSpacing(12)
+        self.fila_kpi_2 = QHBoxLayout()
+        self.fila_kpi_2.setSpacing(12)
+        self.fila_kpi_2.setAlignment(Qt.AlignCenter)
 
         self.kpi_cards = {}
         kpi_defs = [
@@ -98,8 +100,12 @@ class PanelHub(QWidget):
         for idx, (titulo, clave) in enumerate(kpi_defs):
             card = self._crear_tarjeta_kpi(titulo)
             self.kpi_cards[clave] = card
-            self.grid_kpi.addWidget(card, idx // 3, idx % 3)
-        layout.addLayout(self.grid_kpi)
+            if idx < 3:
+                self.fila_kpi_1.addWidget(card)
+            else:
+                self.fila_kpi_2.addWidget(card)
+        layout.addLayout(self.fila_kpi_1)
+        layout.addLayout(self.fila_kpi_2)
 
         # --- Tabla resumen de cursos ---
         self.tabla_cursos = QTableWidget(0, 4)
