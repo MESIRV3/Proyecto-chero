@@ -21,9 +21,9 @@ import sys
 from pathlib import Path
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QLineEdit, QPushButton, QFrame, QTabWidget, QTableWidget,
+    QLabel, QLineEdit, QPushButton, QFrame, QStackedWidget, QTableWidget,
     QTableWidgetItem, QComboBox, QMessageBox, QHeaderView, QCheckBox,
-    QAbstractItemView
+    QAbstractItemView, QButtonGroup
 )
 from PySide6.QtCore import Qt, QPoint, QSize, QRegularExpression
 from PySide6.QtGui import QFont, QIcon, QRegularExpressionValidator
@@ -40,12 +40,19 @@ from interfaz.estilos import (
     COLOR_TEXTO_TENUE,
     COLOR_PELIGRO,
     COLOR_PELIGRO_HOVER,
+    COLOR_TARJETA,
+    COLOR_INPUT,
+    COLOR_ACENTO,
+    COLOR_ACENTO_HOVER,
     _estilo_input,
     _estilo_boton,
     _estilo_tabla,
     _tarjeta,
     _etiqueta,
 )
+
+from interfaz.hub import PanelHub
+from interfaz.asistencia_preview import PanelAsistencia
 
 
 def resource_path(relative_path):
@@ -559,8 +566,9 @@ class PanelAlumnos(QWidget):
 class VentanaAdmin(QMainWindow):
     """Ventana principal del panel de administrador (super usuario)."""
 
-    def __init__(self):
+    def __init__(self, usuario: dict | None = None):
         super().__init__()
+        self.usuario = usuario
         self.setWindowTitle("Panel de Administrador")
         self.setMinimumSize(1000, 650)
         self.resize(1200, 750)
@@ -587,28 +595,129 @@ class VentanaAdmin(QMainWindow):
         else:
             self.ciclo_id = resultado_ciclo.datos
 
-        self.tabs = QTabWidget()
-        self.tabs.setStyleSheet(f"""
-            QTabWidget::pane {{ border: none; }}
-            QTabBar::tab {{
+        self._armar_sidebar_y_stack()
+        layout_raiz.addWidget(self.cuerpo)
+
+    def _armar_sidebar_y_stack(self):
+        """Construye el sidebar de navegacion y el QStackedWidget de paneles."""
+        self.sidebar = QFrame()
+        self.sidebar.setFixedWidth(220)
+        self.sidebar.setStyleSheet(f"""
+            QFrame {{
+                background-color: {COLOR_TARJETA};
+                border-right: 1px solid {COLOR_BORDE};
+            }}
+            QLabel {{
+                color: {COLOR_TEXTO};
                 background: transparent;
+                border: none;
+            }}
+            QPushButton {{
+                background-color: transparent;
                 color: {COLOR_TEXTO_TENUE};
-                padding: 12px 24px;
+                border: none;
+                border-radius: 10px;
+                padding: 12px 16px;
                 font-family: '{FUENTE_MONO}';
                 font-weight: bold;
+                text-align: left;
             }}
-            QTabBar::tab:selected {{
+            QPushButton:hover {{
+                background-color: {COLOR_ACENTO};
                 color: {COLOR_TEXTO};
-                border-bottom: 2px solid #5a5a8a;
+            }}
+            QPushButton:pressed {{
+                background-color: {COLOR_INPUT};
+            }}
+            QPushButton:checked {{
+                background-color: {COLOR_ACENTO};
+                color: {COLOR_TEXTO};
+                border-left: 3px solid {COLOR_TEXTO};
+            }}
+            QPushButton:checked:hover {{
+                background-color: {COLOR_ACENTO_HOVER};
             }}
         """)
 
-        self.panel_alumnos = PanelAlumnos(self.ciclo_id)
-        self.panel_cursos = PanelCursos(self.ciclo_id, on_cambio=self.panel_alumnos.recargar_cursos)
+        layout_sidebar = QVBoxLayout(self.sidebar)
+        layout_sidebar.setContentsMargins(16, 20, 16, 20)
+        layout_sidebar.setSpacing(8)
 
-        self.tabs.addTab(self.panel_cursos, "Cursos")
-        self.tabs.addTab(self.panel_alumnos, "Alumnos")
-        layout_raiz.addWidget(self.tabs)
+        branding = QLabel("Asistencia\nEscolar")
+        branding.setFont(QFont(FUENTE_MONO, 14, QFont.Bold))
+        branding.setStyleSheet(f"color: {COLOR_TEXTO};")
+        layout_sidebar.addWidget(branding)
+        layout_sidebar.addSpacing(24)
+
+        self.grupo_nav = QButtonGroup(self)
+        self.grupo_nav.setExclusive(True)
+        nombres_nav = ["Inicio", "Cursos", "Alumnos", "Asistencia"]
+        for idx, nombre in enumerate(nombres_nav):
+            btn = QPushButton(nombre)
+            btn.setCheckable(True)
+            btn.setCursor(Qt.PointingHandCursor)
+            self.grupo_nav.addButton(btn, idx)
+            layout_sidebar.addWidget(btn)
+
+        layout_sidebar.addStretch()
+
+        self.label_usuario = QLabel()
+        self.label_usuario.setWordWrap(True)
+        self.label_usuario.setStyleSheet(
+            f"color: {COLOR_TEXTO_TENUE}; font-size: 11px; background: transparent; border: none;"
+        )
+        self._actualizar_footer_usuario()
+        layout_sidebar.addWidget(self.label_usuario)
+
+        self.btn_logout = QPushButton("Cerrar sesion")
+        self.btn_logout.setCursor(Qt.PointingHandCursor)
+        self.btn_logout.setStyleSheet(_estilo_boton(COLOR_PELIGRO, COLOR_PELIGRO_HOVER))
+        self.btn_logout.clicked.connect(self._cerrar_sesion)
+        layout_sidebar.addWidget(self.btn_logout)
+
+        self.stack = QStackedWidget()
+
+        self.panel_hub = PanelHub(self.ciclo_id)
+        self.panel_alumnos = PanelAlumnos(self.ciclo_id)
+        self.panel_cursos = PanelCursos(
+            self.ciclo_id, on_cambio=self.panel_alumnos.recargar_cursos
+        )
+        self.panel_asistencia = PanelAsistencia(self.ciclo_id)
+
+        self.stack.addWidget(self.panel_hub)        # 0 - Inicio
+        self.stack.addWidget(self.panel_cursos)     # 1 - Cursos
+        self.stack.addWidget(self.panel_alumnos)    # 2 - Alumnos
+        self.stack.addWidget(self.panel_asistencia) # 3 - Asistencia
+
+        self.grupo_nav.idClicked.connect(self.stack.setCurrentIndex)
+        self.stack.currentChanged.connect(lambda i: self.grupo_nav.button(i).setChecked(True))
+        self.panel_hub.navegar_a_alumnos.connect(lambda: self.stack.setCurrentIndex(2))
+        self.panel_hub.navegar_a_cursos.connect(lambda: self.stack.setCurrentIndex(1))
+
+        self.stack.setCurrentIndex(0)
+        self.grupo_nav.button(0).setChecked(True)
+
+        self.cuerpo = QWidget()
+        layout_cuerpo = QHBoxLayout(self.cuerpo)
+        layout_cuerpo.setContentsMargins(0, 0, 0, 0)
+        layout_cuerpo.setSpacing(0)
+        layout_cuerpo.addWidget(self.sidebar)
+        layout_cuerpo.addWidget(self.stack, stretch=1)
+
+    def _actualizar_footer_usuario(self):
+        if self.usuario:
+            nombre = self.usuario.get("nombre", "Usuario")
+            rol = self.usuario.get("rol", "")
+            self.label_usuario.setText(f"{nombre}\n{rol}")
+        else:
+            self.label_usuario.setText("Sesion local\nModo standalone")
+
+    def _cerrar_sesion(self):
+        """Cierra el admin y abre una nueva ventana de login; nunca termina la app."""
+        from interfaz.login import VentanaLogin
+        self.ventana_login = VentanaLogin()
+        self.ventana_login.mostrar()
+        self.close()
 
     def _armar_barra_titulo(self) -> QWidget:
         barra = QWidget()
