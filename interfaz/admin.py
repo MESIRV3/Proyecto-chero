@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QLineEdit, QPushButton, QFrame, QStackedWidget, QTableWidget,
     QTableWidgetItem, QComboBox, QMessageBox, QHeaderView, QCheckBox,
-    QAbstractItemView, QButtonGroup, QTabWidget
+    QAbstractItemView, QButtonGroup, QTabWidget, QGridLayout, QScrollArea
 )
 from PySide6.QtCore import Qt, QPoint, QSize, QRegularExpression
 from PySide6.QtGui import QFont, QIcon, QRegularExpressionValidator
@@ -130,29 +130,96 @@ def _validador_division() -> QRegularExpressionValidator:
     return QRegularExpressionValidator(QRegularExpression(r"^[1-9]?$"))
 
 
+class TarjetaCurso(QFrame):
+    def __init__(self, curso, ciclo_anio, on_click):
+        super().__init__()
+        self.curso = curso
+        self.on_click = on_click
+        self.setCursor(Qt.PointingHandCursor)
+        self.setStyleSheet(f"""
+            QFrame {{
+                background-color: {COLOR_TARJETA};
+                border-radius: 12px;
+                border: 1px solid {COLOR_BORDE};
+            }}
+            QFrame:hover {{
+                background-color: rgba(255, 255, 255, 0.08);
+            }}
+        """)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setSpacing(8)
+
+        titulo = f"{curso['anio']}°{curso['division']} Ciclo {ciclo_anio}"
+        lbl_titulo = QLabel(titulo)
+        lbl_titulo.setFont(QFont(FUENTE_MONO, 14, QFont.Bold))
+        lbl_titulo.setStyleSheet(f"color: {COLOR_TEXTO}; border: none; background: transparent;")
+        
+        lbl_alumnos = QLabel(f"👥 {curso['cantidad_alumnos']} Alumnos Activos")
+        lbl_alumnos.setFont(QFont(FUENTE_MONO, 11))
+        lbl_alumnos.setStyleSheet(f"color: {COLOR_TEXTO_TENUE}; border: none; background: transparent;")
+
+        layout.addWidget(lbl_titulo)
+        layout.addWidget(lbl_alumnos)
+        
+        if curso['especialidad']:
+            lbl_esp = QLabel(f"📚 {curso['especialidad']}")
+            lbl_esp.setFont(QFont(FUENTE_MONO, 10))
+            lbl_esp.setStyleSheet(f"color: {COLOR_TEXTO_TENUE}; border: none; background: transparent;")
+            layout.addWidget(lbl_esp)
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.on_click(self.curso)
+        super().mousePressEvent(event)
+
+
 class PanelCursos(QWidget):
-    """Alta, listado y baja de cursos."""
+    """Alta, listado y baja de cursos (vista general y detalle)."""
 
     def __init__(self, ciclo_id: int, on_cambio=None):
         super().__init__()
         self.ciclo_id = ciclo_id
-        self.on_cambio = on_cambio  # callback para avisar a PanelAlumnos que recargue combos
-        self._armar_ui()
+        self.on_cambio = on_cambio
+
+        layout_raiz = QVBoxLayout(self)
+        layout_raiz.setContentsMargins(20, 20, 20, 20)
+        
+        self.stack = QStackedWidget()
+        layout_raiz.addWidget(self.stack)
+
+        self.vista_general = QWidget()
+        self._armar_vista_general()
+        
+        self.vista_detalle = QWidget()
+        self._armar_vista_detalle()
+
+        self.stack.addWidget(self.vista_general)
+        self.stack.addWidget(self.vista_detalle)
+
         self.recargar()
 
-    def _armar_ui(self):
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 20, 20, 20)
+    def _armar_vista_general(self):
+        layout = QVBoxLayout(self.vista_general)
+        layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(16)
 
-        # --- Formulario de alta ---
-        tarjeta_form = _tarjeta()
-        form = QHBoxLayout(tarjeta_form)
+        fila_acciones = QHBoxLayout()
+        self.btn_toggle_alta = QPushButton("+ Agregar curso")
+        self.btn_toggle_alta.setCursor(Qt.PointingHandCursor)
+        self.btn_toggle_alta.setStyleSheet(_estilo_boton())
+        self.btn_toggle_alta.clicked.connect(self._alternar_formulario_alta)
+        fila_acciones.addWidget(self.btn_toggle_alta)
+        fila_acciones.addStretch()
+        layout.addLayout(fila_acciones)
+
+        self.tarjeta_form = _tarjeta()
+        form = QHBoxLayout(self.tarjeta_form)
         form.setContentsMargins(20, 16, 20, 16)
         form.setSpacing(12)
 
         col_anio = QVBoxLayout()
-        col_anio.addWidget(_etiqueta("Anio", tenue=True))
+        col_anio.addWidget(_etiqueta("Año", tenue=True))
         self.combo_anio = QComboBox()
         self.combo_anio.addItems(["1", "2", "3", "4", "5", "6"])
         self.combo_anio.setStyleSheet(_estilo_input())
@@ -161,7 +228,7 @@ class PanelCursos(QWidget):
         form.addLayout(col_anio)
 
         col_division = QVBoxLayout()
-        col_division.addWidget(_etiqueta("Division", tenue=True))
+        col_division.addWidget(_etiqueta("División", tenue=True))
         self.input_division = QLineEdit()
         self.input_division.setPlaceholderText("1-9")
         self.input_division.setMaxLength(1)
@@ -188,25 +255,24 @@ class PanelCursos(QWidget):
         col_turno.addWidget(self.combo_turno)
         form.addLayout(col_turno)
 
-        self.btn_agregar = QPushButton("+ Agregar curso")
+        self.btn_agregar = QPushButton("Guardar curso")
         self.btn_agregar.setCursor(Qt.PointingHandCursor)
-        self.btn_agregar.setStyleSheet(_estilo_boton())
+        self.btn_agregar.setStyleSheet(_estilo_boton(COLOR_ACENTO, COLOR_ACENTO_HOVER))
         self.btn_agregar.clicked.connect(self._agregar_curso)
         form.addWidget(self.btn_agregar, alignment=Qt.AlignBottom)
 
-        layout.addWidget(tarjeta_form)
+        self.tarjeta_form.hide()
+        layout.addWidget(self.tarjeta_form)
         self._actualizar_especialidad_habilitada()
 
-        # --- Pestañas de cursos por año ---
         self.tabs_cursos = QTabWidget()
         self.tabs_cursos.setStyleSheet(f"""
             QTabWidget::pane {{
-                border: 1px solid {COLOR_BORDE};
-                border-radius: 10px;
-                background-color: {COLOR_TARJETA};
+                border: none;
+                background: transparent;
             }}
             QTabBar::tab {{
-                background-color: {COLOR_ACENTO};
+                background-color: {COLOR_TARJETA};
                 color: {COLOR_TEXTO};
                 font-family: '{FUENTE_MONO}';
                 font-size: 11px;
@@ -215,39 +281,55 @@ class PanelCursos(QWidget):
                 margin-right: 4px;
             }}
             QTabBar::tab:selected {{
-                background-color: #4a4a52;
+                background-color: {COLOR_ACENTO};
                 font-weight: bold;
+                border-bottom: 2px solid {COLOR_TEXTO};
             }}
             QTabBar::tab:hover {{ background-color: {COLOR_ACENTO_HOVER}; }}
         """)
         layout.addWidget(self.tabs_cursos, stretch=1)
 
-        self.btn_eliminar = QPushButton("Eliminar curso seleccionado")
+    def _armar_vista_detalle(self):
+        layout = QVBoxLayout(self.vista_detalle)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(16)
+
+        header = QHBoxLayout()
+        btn_volver = QPushButton("← Volver a cursos")
+        btn_volver.setCursor(Qt.PointingHandCursor)
+        btn_volver.setStyleSheet(_estilo_boton(COLOR_TARJETA, COLOR_ACENTO_HOVER))
+        btn_volver.clicked.connect(lambda: self.stack.setCurrentIndex(0))
+        header.addWidget(btn_volver)
+        header.addStretch()
+        
+        self.btn_eliminar = QPushButton("Eliminar curso")
         self.btn_eliminar.setCursor(Qt.PointingHandCursor)
         self.btn_eliminar.setStyleSheet(_estilo_boton(COLOR_PELIGRO, COLOR_PELIGRO_HOVER))
         self.btn_eliminar.clicked.connect(self._eliminar_curso)
-        layout.addWidget(self.btn_eliminar, alignment=Qt.AlignLeft)
+        header.addWidget(self.btn_eliminar)
+        
+        layout.addLayout(header)
 
-    def _tabla_anio(self) -> QTableWidget:
-        """Crea una QTableWidget con el estilo estándar para una tab de año."""
-        tabla = QTableWidget(0, 6)
-        tabla.setHorizontalHeaderLabels(
-            ["Año", "División", "Especialidad", "Turno", "Alumnos", "ID"]
-        )
-        tabla.setColumnHidden(5, True)
-        tabla.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        tabla.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        tabla.setSelectionBehavior(QAbstractItemView.SelectRows)
-        tabla.setAlternatingRowColors(True)
-        tabla.setStyleSheet(_estilo_tabla())
-        return tabla
+        self.lbl_detalle_titulo = QLabel("...")
+        self.lbl_detalle_titulo.setFont(QFont(FUENTE_MONO, 20, QFont.Bold))
+        self.lbl_detalle_titulo.setStyleSheet(f"color: {COLOR_TEXTO};")
+        layout.addWidget(self.lbl_detalle_titulo)
 
-    def _tabla_activa(self) -> QTableWidget | None:
-        """Devuelve la QTableWidget de la tab actualmente visible."""
-        widget = self.tabs_cursos.currentWidget()
-        if widget is None:
-            return None
-        return widget.findChild(QTableWidget)
+        self.lbl_detalle_info = QLabel("...")
+        self.lbl_detalle_info.setFont(QFont(FUENTE_MONO, 12))
+        self.lbl_detalle_info.setStyleSheet(f"color: {COLOR_TEXTO_TENUE};")
+        layout.addWidget(self.lbl_detalle_info)
+
+        layout.addStretch()
+        self.curso_actual = None
+
+    def _alternar_formulario_alta(self):
+        if self.tarjeta_form.isHidden():
+            self.tarjeta_form.show()
+            self.btn_toggle_alta.setText("Ocultar formulario")
+        else:
+            self.tarjeta_form.hide()
+            self.btn_toggle_alta.setText("+ Agregar curso")
 
     def _actualizar_especialidad_habilitada(self):
         anio = int(self.combo_anio.currentText())
@@ -267,23 +349,43 @@ class PanelCursos(QWidget):
         resultado = servicio_curso.agregar_curso(self.ciclo_id, anio, division, turno, especialidad)
         if resultado.ok:
             self.input_division.clear()
+            self.tarjeta_form.hide()
+            self.btn_toggle_alta.setText("+ Agregar curso")
             self.recargar()
             if self.on_cambio:
                 self.on_cambio()
         else:
             QMessageBox.warning(self, "No se pudo agregar el curso", resultado.mensaje)
 
+    def _abrir_detalle(self, curso):
+        self.curso_actual = curso
+        
+        import datetime
+        from database.conexion import conexion
+        try:
+            with conexion() as conn:
+                c = conn.cursor()
+                c.execute("SELECT anio FROM ciclo_lectivo WHERE id = ?", (self.ciclo_id,))
+                f = c.fetchone()
+                ciclo_anio = f["anio"] if f else datetime.date.today().year
+        except:
+            ciclo_anio = datetime.date.today().year
+            
+        titulo = f"{curso['anio']}°{curso['division']} Ciclo {ciclo_anio}"
+        self.lbl_detalle_titulo.setText(titulo)
+        
+        esp = f" - {curso['especialidad']}" if curso['especialidad'] else ""
+        info = f"Turno {curso['turno']}{esp} | {curso['cantidad_alumnos']} Alumnos Activos"
+        self.lbl_detalle_info.setText(info)
+        
+        self.stack.setCurrentIndex(1)
+
     def _eliminar_curso(self):
-        tabla = self._tabla_activa()
-        if tabla is None:
-            return
-        fila = tabla.currentRow()
-        if fila < 0:
-            QMessageBox.information(self, "Elegi un curso", "Selecciona primero un curso de la tabla")
+        if not self.curso_actual:
             return
 
-        curso_id = int(tabla.item(fila, 5).text())
-        nombre = tabla.item(fila, 0).text() + " " + tabla.item(fila, 1).text()
+        curso_id = self.curso_actual["id"]
+        nombre = f"{self.curso_actual['anio']}°{self.curso_actual['division']}"
         confirmar = QMessageBox.question(
             self, "Confirmar", f"¿Seguro que querés eliminar el curso {nombre}?"
         )
@@ -292,6 +394,8 @@ class PanelCursos(QWidget):
 
         resultado = servicio_curso.eliminar_curso(curso_id)
         if resultado.ok:
+            self.stack.setCurrentIndex(0)
+            self.curso_actual = None
             self.recargar()
             if self.on_cambio:
                 self.on_cambio()
@@ -307,44 +411,56 @@ class PanelCursos(QWidget):
         cursos = resultado.datos
         ordinales = {1: "1ro", 2: "2do", 3: "3ro", 4: "4to", 5: "5to", 6: "6to"}
 
-        # Agrupar por año
-        por_anio: dict[int, list] = {}
+        por_anio = {}
         for c in cursos:
             por_anio.setdefault(c["anio"], []).append(c)
 
         tab_activo_idx = self.tabs_cursos.currentIndex()
         self.tabs_cursos.blockSignals(True)
         self.tabs_cursos.clear()
+        
+        import datetime
+        from database.conexion import conexion
+        try:
+            with conexion() as conn:
+                c = conn.cursor()
+                c.execute("SELECT anio FROM ciclo_lectivo WHERE id = ?", (self.ciclo_id,))
+                f = c.fetchone()
+                ciclo_anio = f["anio"] if f else datetime.date.today().year
+        except:
+            ciclo_anio = datetime.date.today().year
 
         for anio in sorted(por_anio.keys()):
             label_tab = ordinales.get(anio, f"{anio}°")
             cantidad = len(por_anio[anio])
 
-            contenedor = QWidget()
-            contenedor.setStyleSheet("background: transparent;")
-            v = QVBoxLayout(contenedor)
-            v.setContentsMargins(8, 8, 8, 8)
+            contenedor = QScrollArea()
+            contenedor.setWidgetResizable(True)
+            contenedor.setFrameShape(QFrame.NoFrame)
+            contenedor.setStyleSheet("background: transparent; border: none;")
+            
+            contenido = QWidget()
+            contenido.setStyleSheet("background: transparent;")
+            grilla = QGridLayout(contenido)
+            grilla.setContentsMargins(16, 16, 16, 16)
+            grilla.setSpacing(16)
+            
+            fila, col = 0, 0
+            for curso in por_anio[anio]:
+                tarjeta = TarjetaCurso(curso, ciclo_anio, self._abrir_detalle)
+                grilla.addWidget(tarjeta, fila, col)
+                col += 1
+                if col > 2:
+                    col = 0
+                    fila += 1
+                    
+            grilla.setRowStretch(fila + 1, 1)
+            grilla.setColumnStretch(3, 1)
 
-            tabla = self._tabla_anio()
-            tabla.setRowCount(cantidad)
-            for fila, c in enumerate(por_anio[anio]):
-                especialidad = servicio_curso.NOMBRES_ESPECIALIDAD.get(c["especialidad"], "-")
-                valores = [
-                    ordinales.get(c["anio"], str(c["anio"])),
-                    c["division"],
-                    especialidad,
-                    c["turno"],
-                    str(c["cantidad_alumnos"]),
-                    str(c["id"]),
-                ]
-                for col, valor in enumerate(valores):
-                    tabla.setItem(fila, col, QTableWidgetItem(valor))
-            v.addWidget(tabla)
-
+            contenedor.setWidget(contenido)
             self.tabs_cursos.addTab(contenedor, f"{label_tab}  ({cantidad})")
 
         if not por_anio:
-            # Sin cursos: mostrar tab vacía
             vacio = QWidget()
             vacio.setStyleSheet("background: transparent;")
             lbl = QLabel("No hay cursos para este ciclo lectivo.")
@@ -356,7 +472,6 @@ class PanelCursos(QWidget):
             self.tabs_cursos.addTab(vacio, "Sin cursos")
 
         self.tabs_cursos.blockSignals(False)
-        # Restaurar tab activa si todavía existe
         if 0 <= tab_activo_idx < self.tabs_cursos.count():
             self.tabs_cursos.setCurrentIndex(tab_activo_idx)
 
