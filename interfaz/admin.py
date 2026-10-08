@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QLineEdit, QPushButton, QFrame, QStackedWidget, QTableWidget,
     QTableWidgetItem, QComboBox, QMessageBox, QHeaderView, QCheckBox,
-    QAbstractItemView, QButtonGroup
+    QAbstractItemView, QButtonGroup, QTabWidget
 )
 from PySide6.QtCore import Qt, QPoint, QSize, QRegularExpression
 from PySide6.QtGui import QFont, QIcon, QRegularExpressionValidator
@@ -197,24 +197,57 @@ class PanelCursos(QWidget):
         layout.addWidget(tarjeta_form)
         self._actualizar_especialidad_habilitada()
 
-        # --- Tabla de cursos ---
-        self.tabla = QTableWidget(0, 6)
-        self.tabla.setHorizontalHeaderLabels(
-            ["Anio", "Division", "Especialidad", "Turno", "Alumnos", "ID"]
-        )
-        self.tabla.setColumnHidden(5, True)
-        self.tabla.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.tabla.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.tabla.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.tabla.setAlternatingRowColors(True)
-        self.tabla.setStyleSheet(_estilo_tabla())
-        layout.addWidget(self.tabla)
+        # --- Pestañas de cursos por año ---
+        self.tabs_cursos = QTabWidget()
+        self.tabs_cursos.setStyleSheet(f"""
+            QTabWidget::pane {{
+                border: 1px solid {COLOR_BORDE};
+                border-radius: 10px;
+                background-color: {COLOR_TARJETA};
+            }}
+            QTabBar::tab {{
+                background-color: {COLOR_ACENTO};
+                color: {COLOR_TEXTO};
+                font-family: '{FUENTE_MONO}';
+                font-size: 11px;
+                padding: 7px 18px;
+                border-radius: 6px;
+                margin-right: 4px;
+            }}
+            QTabBar::tab:selected {{
+                background-color: #4a4a52;
+                font-weight: bold;
+            }}
+            QTabBar::tab:hover {{ background-color: {COLOR_ACENTO_HOVER}; }}
+        """)
+        layout.addWidget(self.tabs_cursos, stretch=1)
 
         self.btn_eliminar = QPushButton("Eliminar curso seleccionado")
         self.btn_eliminar.setCursor(Qt.PointingHandCursor)
         self.btn_eliminar.setStyleSheet(_estilo_boton(COLOR_PELIGRO, COLOR_PELIGRO_HOVER))
         self.btn_eliminar.clicked.connect(self._eliminar_curso)
         layout.addWidget(self.btn_eliminar, alignment=Qt.AlignLeft)
+
+    def _tabla_anio(self) -> QTableWidget:
+        """Crea una QTableWidget con el estilo estándar para una tab de año."""
+        tabla = QTableWidget(0, 6)
+        tabla.setHorizontalHeaderLabels(
+            ["Año", "División", "Especialidad", "Turno", "Alumnos", "ID"]
+        )
+        tabla.setColumnHidden(5, True)
+        tabla.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        tabla.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        tabla.setSelectionBehavior(QAbstractItemView.SelectRows)
+        tabla.setAlternatingRowColors(True)
+        tabla.setStyleSheet(_estilo_tabla())
+        return tabla
+
+    def _tabla_activa(self) -> QTableWidget | None:
+        """Devuelve la QTableWidget de la tab actualmente visible."""
+        widget = self.tabs_cursos.currentWidget()
+        if widget is None:
+            return None
+        return widget.findChild(QTableWidget)
 
     def _actualizar_especialidad_habilitada(self):
         anio = int(self.combo_anio.currentText())
@@ -241,15 +274,18 @@ class PanelCursos(QWidget):
             QMessageBox.warning(self, "No se pudo agregar el curso", resultado.mensaje)
 
     def _eliminar_curso(self):
-        fila = self.tabla.currentRow()
+        tabla = self._tabla_activa()
+        if tabla is None:
+            return
+        fila = tabla.currentRow()
         if fila < 0:
             QMessageBox.information(self, "Elegi un curso", "Selecciona primero un curso de la tabla")
             return
 
-        curso_id = int(self.tabla.item(fila, 5).text())
-        nombre = self.tabla.item(fila, 0).text() + " " + self.tabla.item(fila, 1).text()
+        curso_id = int(tabla.item(fila, 5).text())
+        nombre = tabla.item(fila, 0).text() + " " + tabla.item(fila, 1).text()
         confirmar = QMessageBox.question(
-            self, "Confirmar", f"Seguro que queres eliminar el curso {nombre}?"
+            self, "Confirmar", f"¿Seguro que querés eliminar el curso {nombre}?"
         )
         if confirmar != QMessageBox.Yes:
             return
@@ -269,20 +305,60 @@ class PanelCursos(QWidget):
             return
 
         cursos = resultado.datos
-        self.tabla.setRowCount(len(cursos))
         ordinales = {1: "1ro", 2: "2do", 3: "3ro", 4: "4to", 5: "5to", 6: "6to"}
-        for fila, c in enumerate(cursos):
-            especialidad = servicio_curso.NOMBRES_ESPECIALIDAD.get(c["especialidad"], "-")
-            valores = [
-                ordinales.get(c["anio"], str(c["anio"])),
-                c["division"],
-                especialidad,
-                c["turno"],
-                str(c["cantidad_alumnos"]),
-                str(c["id"]),
-            ]
-            for col, valor in enumerate(valores):
-                self.tabla.setItem(fila, col, QTableWidgetItem(valor))
+
+        # Agrupar por año
+        por_anio: dict[int, list] = {}
+        for c in cursos:
+            por_anio.setdefault(c["anio"], []).append(c)
+
+        tab_activo_idx = self.tabs_cursos.currentIndex()
+        self.tabs_cursos.blockSignals(True)
+        self.tabs_cursos.clear()
+
+        for anio in sorted(por_anio.keys()):
+            label_tab = ordinales.get(anio, f"{anio}°")
+            cantidad = len(por_anio[anio])
+
+            contenedor = QWidget()
+            contenedor.setStyleSheet("background: transparent;")
+            v = QVBoxLayout(contenedor)
+            v.setContentsMargins(8, 8, 8, 8)
+
+            tabla = self._tabla_anio()
+            tabla.setRowCount(cantidad)
+            for fila, c in enumerate(por_anio[anio]):
+                especialidad = servicio_curso.NOMBRES_ESPECIALIDAD.get(c["especialidad"], "-")
+                valores = [
+                    ordinales.get(c["anio"], str(c["anio"])),
+                    c["division"],
+                    especialidad,
+                    c["turno"],
+                    str(c["cantidad_alumnos"]),
+                    str(c["id"]),
+                ]
+                for col, valor in enumerate(valores):
+                    tabla.setItem(fila, col, QTableWidgetItem(valor))
+            v.addWidget(tabla)
+
+            self.tabs_cursos.addTab(contenedor, f"{label_tab}  ({cantidad})")
+
+        if not por_anio:
+            # Sin cursos: mostrar tab vacía
+            vacio = QWidget()
+            vacio.setStyleSheet("background: transparent;")
+            lbl = QLabel("No hay cursos para este ciclo lectivo.")
+            lbl.setFont(QFont(FUENTE_MONO, 11))
+            lbl.setStyleSheet(f"color: {COLOR_TEXTO_TENUE}; background: transparent;")
+            lbl.setAlignment(Qt.AlignCenter)
+            lay = QVBoxLayout(vacio)
+            lay.addWidget(lbl)
+            self.tabs_cursos.addTab(vacio, "Sin cursos")
+
+        self.tabs_cursos.blockSignals(False)
+        # Restaurar tab activa si todavía existe
+        if 0 <= tab_activo_idx < self.tabs_cursos.count():
+            self.tabs_cursos.setCurrentIndex(tab_activo_idx)
 
 
 class PanelAlumnos(QWidget):
