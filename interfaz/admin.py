@@ -131,25 +131,19 @@ def _validador_division() -> QRegularExpressionValidator:
 
 
 class FilaAlumnoMinimalista(QFrame):
-    """Fila minimalista para la lista de alumnos dentro del detalle de un curso."""
+    """Fila minimalista para la lista de alumnos (usada en detalle de curso y en panel alumnos)."""
 
-    def __init__(self, index: int, alumno: dict):
+    def __init__(self, index: int, alumno: dict, curso_texto: str = "", on_click=None):
         super().__init__()
         self.alumno = alumno
-        self.texto_busqueda = f"{alumno['numero']} {alumno['apellido']} {alumno['nombre']} {alumno.get('dni') or ''}".lower()
+        self.on_click = on_click
+        self.seleccionada = False
+        self.setCursor(Qt.PointingHandCursor if on_click else Qt.ArrowCursor)
+
+        self.texto_busqueda = f"{alumno['numero']} {alumno['apellido']} {alumno['nombre']} {alumno.get('dni') or ''} {curso_texto}".lower()
 
         self.setFixedHeight(50)
-        self.setStyleSheet(f"""
-            QFrame {{
-                background-color: rgba(255, 255, 255, 0.02);
-                border: 1px solid rgba(255, 255, 255, 0.05);
-                border-radius: 10px;
-            }}
-            QFrame:hover {{
-                background-color: rgba(255, 255, 255, 0.06);
-                border: 1px solid rgba(255, 255, 255, 0.12);
-            }}
-        """)
+        self._actualizar_estilo()
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(16, 0, 16, 0)
@@ -174,7 +168,20 @@ class FilaAlumnoMinimalista(QFrame):
         lbl_nombre.setStyleSheet(f"color: {COLOR_TEXTO}; background: transparent; border: none;")
         layout.addWidget(lbl_nombre, stretch=1)
 
-        # 3. DNI
+        # 3. Badge Curso (opcional, util cuando se listan alumnos de todos los cursos)
+        if curso_texto:
+            lbl_curso = QLabel(curso_texto)
+            lbl_curso.setFont(QFont(FUENTE_MONO, 9, QFont.Bold))
+            lbl_curso.setStyleSheet(f"""
+                color: {COLOR_TEXTO_TENUE};
+                background-color: rgba(255, 255, 255, 0.04);
+                border: 1px solid {COLOR_BORDE};
+                border-radius: 6px;
+                padding: 3px 8px;
+            """)
+            layout.addWidget(lbl_curso)
+
+        # 4. DNI
         dni = alumno.get("dni")
         if dni:
             try:
@@ -189,7 +196,7 @@ class FilaAlumnoMinimalista(QFrame):
         lbl_dni.setStyleSheet(f"color: {COLOR_TEXTO_TENUE}; background: transparent; border: none;")
         layout.addWidget(lbl_dni)
 
-        # 4. Nacionalidad con bandera
+        # 5. Nacionalidad con bandera
         nac = alumno.get("nacionalidad") or "Argentina"
         banderas = {
             "Argentina": "🇦🇷", "Bolivia": "🇧🇴", "Brasil": "🇧🇷",
@@ -202,7 +209,7 @@ class FilaAlumnoMinimalista(QFrame):
         lbl_nac.setStyleSheet(f"color: {COLOR_TEXTO_TENUE}; background: transparent; border: none;")
         layout.addWidget(lbl_nac)
 
-        # 5. Pill de estado
+        # 6. Pill de estado
         activo = bool(alumno.get("activo", 1))
         lbl_estado = QLabel("● Activo" if activo else "● De baja")
         lbl_estado.setFont(QFont(FUENTE_MONO, 9, QFont.Bold))
@@ -223,6 +230,37 @@ class FilaAlumnoMinimalista(QFrame):
                 padding: 3px 10px;
             """)
         layout.addWidget(lbl_estado)
+
+    def _actualizar_estilo(self):
+        if self.seleccionada:
+            self.setStyleSheet(f"""
+                QFrame {{
+                    background-color: rgba(255, 255, 255, 0.09);
+                    border: 1px solid #7a7a85;
+                    border-radius: 10px;
+                }}
+            """)
+        else:
+            self.setStyleSheet(f"""
+                QFrame {{
+                    background-color: rgba(255, 255, 255, 0.02);
+                    border: 1px solid rgba(255, 255, 255, 0.05);
+                    border-radius: 10px;
+                }}
+                QFrame:hover {{
+                    background-color: rgba(255, 255, 255, 0.06);
+                    border: 1px solid rgba(255, 255, 255, 0.12);
+                }}
+            """)
+
+    def set_seleccionada(self, valor: bool):
+        self.seleccionada = valor
+        self._actualizar_estilo()
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton and self.on_click:
+            self.on_click(self)
+        super().mousePressEvent(event)
 
 
 class TarjetaCurso(QFrame):
@@ -705,12 +743,17 @@ class PanelCursos(QWidget):
 
 
 class PanelAlumnos(QWidget):
-    """Alta, listado, baja/reactivacion y cambio de curso de alumnos."""
+    """Alta, listado minimalista, baja/reactivacion y cambio de curso de alumnos."""
 
     def __init__(self, ciclo_id: int, on_cambio=None):
         super().__init__()
         self.ciclo_id = ciclo_id
         self.on_cambio = on_cambio
+        self.mapa_cursos = {}
+        self.filas_alumnos = []
+        self.alumno_seleccionado = None
+        self.fila_seleccionada = None
+
         self._armar_ui()
         self.recargar_cursos()
 
@@ -719,8 +762,10 @@ class PanelAlumnos(QWidget):
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(16)
 
-        # --- Filtro (arriba de todo, la tabla es lo principal de esta pantalla) ---
+        # --- Filtros y Buscador superior ---
         fila_filtro = QHBoxLayout()
+        fila_filtro.setSpacing(12)
+
         fila_filtro.addWidget(_etiqueta("Ver curso:", tenue=True))
         self.combo_curso_filtro = QComboBox()
         self.combo_curso_filtro.setStyleSheet(_estilo_input())
@@ -731,20 +776,15 @@ class PanelAlumnos(QWidget):
         self.check_inactivos.setStyleSheet(f"color: {COLOR_TEXTO_TENUE};")
         self.check_inactivos.stateChanged.connect(self.recargar_tabla)
         fila_filtro.addWidget(self.check_inactivos)
-        layout.addLayout(fila_filtro)
 
-        # --- Tabla de alumnos (ocupa todo el espacio que el formulario deja libre) ---
-        self.tabla = QTableWidget(0, 7)
-        self.tabla.setHorizontalHeaderLabels(
-            ["Numero", "Apellido", "Nombre", "DNI", "Nacionalidad", "Estado", "Curso ID"]
-        )
-        self.tabla.setColumnHidden(6, True)
-        self.tabla.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.tabla.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.tabla.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.tabla.setAlternatingRowColors(True)
-        self.tabla.setStyleSheet(_estilo_tabla())
-        layout.addWidget(self.tabla, stretch=1)
+        self.input_buscar_alumno = QLineEdit()
+        self.input_buscar_alumno.setPlaceholderText("🔍 Buscar por apellido, nombre o DNI...")
+        self.input_buscar_alumno.setStyleSheet(_estilo_input())
+        self.input_buscar_alumno.setFixedWidth(280)
+        self.input_buscar_alumno.textChanged.connect(self._filtrar_alumnos)
+        fila_filtro.addWidget(self.input_buscar_alumno)
+
+        layout.addLayout(fila_filtro)
 
         # --- Formulario de alta (arranca oculto; se muestra con el boton "+ Agregar alumno") ---
         self.tarjeta_form = _tarjeta()
@@ -828,7 +868,50 @@ class PanelAlumnos(QWidget):
         layout.addWidget(self.tarjeta_form)
         self._actualizar_maximo_dni(self.combo_nacionalidad.currentText())
 
-        # --- Acciones sobre el seleccionado (aca vive el boton para abrir el alta) ---
+        # --- Lista minimalista de alumnos ---
+        self.scroll_alumnos = QScrollArea()
+        self.scroll_alumnos.setWidgetResizable(True)
+        self.scroll_alumnos.setFrameShape(QFrame.NoFrame)
+        self.scroll_alumnos.setStyleSheet(f"""
+            QScrollArea {{
+                background: transparent;
+                border: none;
+            }}
+            QScrollBar:vertical {{
+                background: transparent;
+                width: 8px;
+                margin: 0px;
+            }}
+            QScrollBar::handle:vertical {{
+                background: {COLOR_ACENTO};
+                border-radius: 4px;
+                min-height: 20px;
+            }}
+            QScrollBar::handle:vertical:hover {{
+                background: {COLOR_ACENTO_HOVER};
+            }}
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
+                height: 0px;
+            }}
+        """)
+
+        self.contenedor_alumnos = QWidget()
+        self.contenedor_alumnos.setStyleSheet("background: transparent;")
+        self.layout_alumnos = QVBoxLayout(self.contenedor_alumnos)
+        self.layout_alumnos.setContentsMargins(0, 4, 0, 4)
+        self.layout_alumnos.setSpacing(8)
+
+        self.lbl_sin_resultados = QLabel("No se encontraron alumnos que coincidan con la búsqueda.")
+        self.lbl_sin_resultados.setFont(QFont(FUENTE_MONO, 11))
+        self.lbl_sin_resultados.setStyleSheet(f"color: {COLOR_TEXTO_TENUE}; padding: 20px;")
+        self.lbl_sin_resultados.setAlignment(Qt.AlignCenter)
+        self.lbl_sin_resultados.hide()
+        self.layout_alumnos.addWidget(self.lbl_sin_resultados)
+
+        self.scroll_alumnos.setWidget(self.contenedor_alumnos)
+        layout.addWidget(self.scroll_alumnos, stretch=1)
+
+        # --- Acciones sobre el seleccionado ---
         fila_acciones = QHBoxLayout()
 
         self.btn_toggle_alta = QPushButton("+ Agregar alumno")
@@ -879,6 +962,8 @@ class PanelAlumnos(QWidget):
         resultado = servicio_curso.listar_cursos(self.ciclo_id)
         cursos = resultado.datos if resultado.ok else []
 
+        self.mapa_cursos = {c["id"]: servicio_curso.obtener_nombre_curso(c) for c in cursos}
+
         for combo in (self.combo_curso_alta, self.combo_nuevo_curso):
             combo.clear()
             for c in cursos:
@@ -924,6 +1009,18 @@ class PanelAlumnos(QWidget):
         else:
             QMessageBox.warning(self, "No se pudo agregar el alumno", resultado.mensaje)
 
+    def _on_fila_alumno_click(self, fila):
+        if self.fila_seleccionada == fila:
+            fila.set_seleccionada(False)
+            self.fila_seleccionada = None
+            self.alumno_seleccionado = None
+        else:
+            if self.fila_seleccionada:
+                self.fila_seleccionada.set_seleccionada(False)
+            self.fila_seleccionada = fila
+            self.alumno_seleccionado = fila.alumno
+            fila.set_seleccionada(True)
+
     def recargar_tabla(self):
         curso_id = self.combo_curso_filtro.currentData()
         solo_activos = not self.check_inactivos.isChecked()
@@ -932,23 +1029,72 @@ class PanelAlumnos(QWidget):
             QMessageBox.warning(self, "Error", resultado.mensaje)
             return
 
+        self.alumno_seleccionado = None
+        self.fila_seleccionada = None
+
+        for fila in self.filas_alumnos:
+            self.layout_alumnos.removeWidget(fila)
+            fila.deleteLater()
+        self.filas_alumnos.clear()
+
+        for i in reversed(range(self.layout_alumnos.count())):
+            item = self.layout_alumnos.itemAt(i)
+            widget = item.widget()
+            if widget and widget != self.lbl_sin_resultados:
+                self.layout_alumnos.removeWidget(widget)
+                widget.deleteLater()
+            elif not widget:
+                self.layout_alumnos.removeItem(item)
+
         alumnos = resultado.datos
-        self.tabla.setRowCount(len(alumnos))
-        for fila, a in enumerate(alumnos):
-            estado = "Activo" if a["activo"] else "De baja"
-            valores = [
-                str(a["numero"]), a["apellido"], a["nombre"],
-                a["dni"] or "-", a["nacionalidad"] or "-", estado, str(a["curso_id"]),
-            ]
-            for col, valor in enumerate(valores):
-                self.tabla.setItem(fila, col, QTableWidgetItem(valor))
+        self.lbl_sin_resultados.hide()
+
+        if not alumnos:
+            lbl_vacio = QLabel("No hay alumnos cargados para el filtro actual.")
+            lbl_vacio.setFont(QFont(FUENTE_MONO, 11))
+            lbl_vacio.setStyleSheet(f"color: {COLOR_TEXTO_TENUE}; padding: 30px;")
+            lbl_vacio.setAlignment(Qt.AlignCenter)
+            self.layout_alumnos.addWidget(lbl_vacio)
+        else:
+            for idx, a in enumerate(alumnos, 1):
+                curso_texto = self.mapa_cursos.get(a.get("curso_id"), "")
+                fila = FilaAlumnoMinimalista(
+                    idx,
+                    a,
+                    curso_texto=curso_texto,
+                    on_click=self._on_fila_alumno_click,
+                )
+                self.layout_alumnos.addWidget(fila)
+                self.filas_alumnos.append(fila)
+
+        self.layout_alumnos.addStretch()
+
+        texto_busqueda = self.input_buscar_alumno.text().strip()
+        if texto_busqueda:
+            self._filtrar_alumnos(texto_busqueda)
+
+    def _filtrar_alumnos(self, texto: str):
+        texto = texto.strip().lower()
+        visibles = 0
+        for fila in self.filas_alumnos:
+            coincide = not texto or (texto in fila.texto_busqueda)
+            fila.setVisible(coincide)
+            if coincide:
+                visibles += 1
+
+        total = len(self.filas_alumnos)
+        if total > 0 and visibles == 0:
+            self.lbl_sin_resultados.show()
+        else:
+            self.lbl_sin_resultados.hide()
 
     def _numero_seleccionado(self):
-        fila = self.tabla.currentRow()
-        if fila < 0:
-            QMessageBox.information(self, "Elegi un alumno", "Selecciona primero un alumno de la tabla")
+        if not self.alumno_seleccionado:
+            QMessageBox.information(
+                self, "Elegí un alumno", "Seleccioná primero un alumno de la lista haciendo clic sobre él"
+            )
             return None
-        return int(self.tabla.item(fila, 0).text())
+        return int(self.alumno_seleccionado["numero"])
 
     def _dar_de_baja(self):
         numero = self._numero_seleccionado()
