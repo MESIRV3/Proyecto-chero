@@ -296,8 +296,14 @@ class VentanaLogin(QMainWindow):
             QPushButton:pressed { background-color: #1a1a1e; }
         """)
         self.btn_ingresar.clicked.connect(self._intentar_login)
+        self.input_usuario.returnPressed.connect(self._al_presionar_enter_usuario)
         self.input_clave.returnPressed.connect(self._intentar_login)
         layout_principal.addWidget(self.btn_ingresar)
+
+    def _al_presionar_enter_usuario(self):
+        """Pasa el foco al campo de contrasena al presionar Enter si hay texto escrito."""
+        if self.input_usuario.text().strip():
+            self.input_clave.setFocus()
 
     def _intentar_login(self):
         from servicios.usuario import autenticar
