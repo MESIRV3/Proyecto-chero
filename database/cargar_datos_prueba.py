@@ -14,7 +14,6 @@ def cargar_datos():
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
 
-
     # LIMPIAR DATOS PREVIOS (por si se corre varias veces)
     tablas = [
         "justificacion", "asistencia", "lista_diaria",
@@ -32,23 +31,25 @@ def cargar_datos():
     """)
     ciclo_id = cursor.lastrowid
 
-    # 2. CURSOS
-    # division numerica (1°1, 1°2, 1°3...) como se usa en la escuela real.
-    # turno "Manana"/"Tarde" (mayuscula) para que sea consistente con lo que
-    # valida servicios/curso.py. 1er anio va sin especialidad; 5to (a partir
-    # de 3ro) esta obligado a tener una.
+    # 2. CURSOS (Un curso por año: de 1° a 6°)
+    # 1ro y 2do sin especialidad. De 3ro a 6to con especialidad ("Computacion").
     cursos = [
         (1, "1", "Mañana", None),
-        (1, "2", "Mañana", None),
+        (2, "1", "Mañana", None),
+        (3, "1", "Mañana", "Computacion"),
+        (4, "1", "Mañana", "Computacion"),
         (5, "1", "Mañana", "Computacion"),
+        (6, "1", "Mañana", "Computacion"),
     ]
-    cursos_ids = []
+    cursos_map = {}
     for anio, division, turno, especialidad in cursos:
         cursor.execute("""
             INSERT INTO curso (ciclo_id, anio, division, especialidad, turno)
             VALUES (?, ?, ?, ?, ?)
         """, (ciclo_id, anio, division, especialidad, turno))
-        cursos_ids.append(cursor.lastrowid)
+        cursos_map[(anio, division)] = cursor.lastrowid
+
+    curso_5_1_id = cursos_map[(5, "1")]
 
     # 3. USUARIOS (con contrasenas hasheadas mediante bcrypt)
     usuarios = [
@@ -68,33 +69,28 @@ def cargar_datos():
         usuarios_ids.append(cursor.lastrowid)
 
     # 4. MATERIAS (para 5°1)
-
     materias = ["Ingles", "Matematicas", "Lengua", "Historia", "Educacion Fisica"]
     materia_ids = []
     for nombre in materias:
         cursor.execute("""
             INSERT INTO materia (nombre, curso_id)
             VALUES (?, ?)
-        """, (nombre, cursos_ids[2]))  # 5°1
+        """, (nombre, curso_5_1_id))
         materia_ids.append(cursor.lastrowid)
 
-
     # 5. HORARIO (la grilla semanal de 5°1, lunes)
-  
-    # Recreos tienen materia_id NULL, usuario_id NULL, es_recreo=1
-    # Clases tienen materia_id y usuario_id, es_recreo=0
     horario_5a_lunes = [
         # (numero_bloque, hora_inicio, hora_fin, es_recreo, materia_idx, usuario_idx)
-        (1, "07:30", "08:10", 0, 0, 1),  # Ingles     - Carlos
-        (2, "08:10", "08:50", 0, 1, 2),  # Matematicas - Laura
+        (1, "07:30", "08:10", 0, 0, 1),        # Ingles     - Carlos
+        (2, "08:10", "08:50", 0, 1, 2),        # Matematicas - Laura
         (0, "08:50", "09:00", 1, None, None),  # Recreo
-        (3, "09:00", "09:40", 0, 1, 2),  # Matematicas - Laura
-        (4, "09:40", "10:20", 0, 2, 2),  # Lengua      - Laura
+        (3, "09:00", "09:40", 0, 1, 2),        # Matematicas - Laura
+        (4, "09:40", "10:20", 0, 2, 2),        # Lengua      - Laura
         (0, "10:20", "10:30", 1, None, None),  # Recreo
-        (5, "10:30", "11:10", 0, 3, 2),  # Historia    - Laura
-        (6, "11:10", "11:50", 0, 4, 2),  # Ed. Fisica  - Laura
+        (5, "10:30", "11:10", 0, 3, 2),        # Historia    - Laura
+        (6, "11:10", "11:50", 0, 4, 2),        # Ed. Fisica  - Laura
         (0, "11:50", "12:00", 1, None, None),  # Recreo salida
-        (7, "12:00", "12:40", 0, 1, 2),  # Matematicas - Laura
+        (7, "12:00", "12:40", 0, 1, 2),        # Matematicas - Laura
     ]
     for bloque, inicio, fin, recreo, mat_idx, usr_idx in horario_5a_lunes:
         mat_id = materia_ids[mat_idx] if mat_idx is not None else None
@@ -104,38 +100,58 @@ def cargar_datos():
                 (curso_id, dia_semana, numero_bloque, hora_inicio, hora_fin,
                  es_recreo, materia_id, usuario_id)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (cursos_ids[2], 1, bloque, inicio, fin, recreo, mat_id, usr_id))
+        """, (curso_5_1_id, 1, bloque, inicio, fin, recreo, mat_id, usr_id))
 
-    # 6. ALUMNOS (10 de 1°1, 10 de 1°2, 10 de 5°1)
+    # 6. ALUMNOS (25 alumnos por cada uno de los 6 cursos = 150 alumnos)
+    nombres_pool = [
+        "Lucas", "Martina", "Mateo", "Valentina", "Santiago",
+        "Camila", "Joaquin", "Lucia", "Benjamin", "Catalina",
+        "Ignacio", "Julieta", "Facundo", "Abril", "Nicolas",
+        "Mora", "Agustin", "Florencia", "Tomas", "Milagros",
+        "Franco", "Zoe", "Emiliano", "Delfina", "Julian",
+        "Bautista", "Victoria", "Maximiliano", "Paula", "Thiago"
+    ]
 
-    nombres = ["Juan", "Sofia", "Mateo", "Valentina", "Lucas",
-               "Camila", "Tomas", "Isabella", "Diego", "Martina"]
-    apellidos = ["Lopez", "Martinez", "Garcia", "Rodriguez", "Fernandez",
-                 "Gomez", "Diaz", "Morales", "Romero", "Acosta"]
+    apellidos_pool = [
+        "Gonzalez", "Rodriguez", "Gomez", "Fernandez", "Lopez",
+        "Diaz", "Martinez", "Perez", "Romero", "Sanchez",
+        "Alvarez", "Torres", "Ruiz", "Ramirez", "Flores",
+        "Acosta", "Benitez", "Medina", "Herrera", "Suarez",
+        "Castro", "Gimenez", "Gutierrez", "Pereyra", "Rios",
+        "Molina", "Vazquez", "Silva", "Ortiz", "Navarro"
+    ]
 
-    alumno_numero = 10000000  # legajo base de 8 digitos
-    for i in range(10):
-        for curso_id in cursos_ids:
+    paises_distribucion = [
+        "Argentina", "Argentina", "Argentina", "Argentina", "Argentina",
+        "Argentina", "Argentina", "Argentina", "Argentina", "Argentina",
+        "Bolivia", "Paraguay", "Uruguay", "Chile", "Brasil", "Perú", "Venezuela", "Colombia"
+    ]
+
+    legajo_base = 10001000
+    dni_base = 46000000
+    alumno_counter = 0
+
+    for (anio, division), curso_id in cursos_map.items():
+        for i in range(25):
+            alumno_counter += 1
+            legajo = legajo_base + alumno_counter
+            dni = f"{dni_base + alumno_counter:08d}"
+            
+            # Generar combinacion unica y natural de nombres
+            nombre = nombres_pool[(alumno_counter * 7 + i) % len(nombres_pool)]
+            apellido = apellidos_pool[(alumno_counter * 11 + (anio * 3)) % len(apellidos_pool)]
+            pais = paises_distribucion[(alumno_counter * 5) % len(paises_distribucion)]
+
             cursor.execute("""
-                INSERT INTO alumno (numero, nombre, apellido, dni, nacionalidad, curso_id)
-                VALUES (?, ?, ?, ?, ?, ?)
-            """, (
-                alumno_numero,
-                nombres[i],
-                apellidos[i],
-                f"{(alumno_numero % 100000000):08d}",
-                "Argentina",
-                curso_id
-            ))
-            alumno_numero += 1
+                INSERT INTO alumno (numero, nombre, apellido, dni, nacionalidad, curso_id, activo)
+                VALUES (?, ?, ?, ?, ?, ?, 1)
+            """, (legajo, nombre, apellido, dni, pais, curso_id))
 
     # 7. DIAS HABILES (marzo a junio 2026, lunes a viernes)
-
     inicio = date(2026, 3, 1)
     fin = date(2026, 6, 30)
     actual = inicio
     while actual <= fin:
-        # weekday(): lunes=0, ..., domingo=6
         if actual.weekday() < 5:
             cursor.execute("""
                 INSERT INTO dia_habil (fecha, es_habil, motivo)
@@ -146,14 +162,14 @@ def cargar_datos():
     conn.commit()
     conn.close()
 
-    print("Datos de prueba cargados:")
-    print(f"  - 1 ciclo lectivo (2026)")
-    print(f"  - 3 cursos (1°1, 1°2, 5°1)")
-    print(f"  - 5 usuarios (1 preceptor, 2 profes, 1 directivo, 1 admin)")
-    print(f"  - 5 materias (de 5°1)")
-    print(f"  - 10 bloques de horario (lunes de 5°1)")
-    print(f"  - 30 alumnos (10 por curso)")
-    print(f"  - Dias habiles de marzo a junio 2026")
+    print("Datos de prueba cargados correctamente:")
+    print("  - 1 ciclo lectivo (2026)")
+    print(f"  - 6 cursos (1 por año: 1°1, 2°1, 3°1, 4°1, 5°1, 6°1)")
+    print("  - 5 usuarios (1 preceptor, 2 profes, 1 directivo, 1 admin)")
+    print("  - 5 materias (de 5°1)")
+    print("  - 10 bloques de horario (lunes de 5°1)")
+    print(f"  - {alumno_counter} alumnos en total (25 por curso)")
+    print("  - Dias habiles de marzo a junio 2026")
     print()
     print("  Usuario admin de prueba -> username: admin / password: admin123")
 
