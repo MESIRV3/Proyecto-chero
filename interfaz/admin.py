@@ -130,6 +130,101 @@ def _validador_division() -> QRegularExpressionValidator:
     return QRegularExpressionValidator(QRegularExpression(r"^[1-9]?$"))
 
 
+class FilaAlumnoMinimalista(QFrame):
+    """Fila minimalista para la lista de alumnos dentro del detalle de un curso."""
+
+    def __init__(self, index: int, alumno: dict):
+        super().__init__()
+        self.alumno = alumno
+        self.texto_busqueda = f"{alumno['numero']} {alumno['apellido']} {alumno['nombre']} {alumno.get('dni') or ''}".lower()
+
+        self.setFixedHeight(50)
+        self.setStyleSheet(f"""
+            QFrame {{
+                background-color: rgba(255, 255, 255, 0.02);
+                border: 1px solid rgba(255, 255, 255, 0.05);
+                border-radius: 10px;
+            }}
+            QFrame:hover {{
+                background-color: rgba(255, 255, 255, 0.06);
+                border: 1px solid rgba(255, 255, 255, 0.12);
+            }}
+        """)
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(16, 0, 16, 0)
+        layout.setSpacing(14)
+
+        # 1. Badge Legajo
+        lbl_legajo = QLabel(f"#{alumno['numero']}")
+        lbl_legajo.setFont(QFont(FUENTE_MONO, 10, QFont.Bold))
+        lbl_legajo.setStyleSheet(f"""
+            color: {COLOR_TEXTO_TENUE};
+            background-color: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 6px;
+            padding: 4px 8px;
+        """)
+        layout.addWidget(lbl_legajo)
+
+        # 2. Nombre y Apellido
+        nombre_completo = f"{alumno['apellido'].upper()}, {alumno['nombre']}"
+        lbl_nombre = QLabel(nombre_completo)
+        lbl_nombre.setFont(QFont(FUENTE_MONO, 11, QFont.Bold))
+        lbl_nombre.setStyleSheet(f"color: {COLOR_TEXTO}; background: transparent; border: none;")
+        layout.addWidget(lbl_nombre, stretch=1)
+
+        # 3. DNI
+        dni = alumno.get("dni")
+        if dni:
+            try:
+                dni_fmt = f"{int(dni):,}".replace(",", ".")
+            except ValueError:
+                dni_fmt = str(dni)
+            txt_dni = f"DNI {dni_fmt}"
+        else:
+            txt_dni = "DNI —"
+        lbl_dni = QLabel(txt_dni)
+        lbl_dni.setFont(QFont(FUENTE_MONO, 10))
+        lbl_dni.setStyleSheet(f"color: {COLOR_TEXTO_TENUE}; background: transparent; border: none;")
+        layout.addWidget(lbl_dni)
+
+        # 4. Nacionalidad con bandera
+        nac = alumno.get("nacionalidad") or "Argentina"
+        banderas = {
+            "Argentina": "🇦🇷", "Bolivia": "🇧🇴", "Brasil": "🇧🇷",
+            "Chile": "🇨🇱", "Colombia": "🇨🇴", "Paraguay": "🇵🇾",
+            "Perú": "🇵🇪", "Uruguay": "🇺🇾", "Venezuela": "🇻🇪",
+        }
+        bandera = banderas.get(nac, "🌐")
+        lbl_nac = QLabel(f"{bandera} {nac}")
+        lbl_nac.setFont(QFont(FUENTE_MONO, 10))
+        lbl_nac.setStyleSheet(f"color: {COLOR_TEXTO_TENUE}; background: transparent; border: none;")
+        layout.addWidget(lbl_nac)
+
+        # 5. Pill de estado
+        activo = bool(alumno.get("activo", 1))
+        lbl_estado = QLabel("● Activo" if activo else "● De baja")
+        lbl_estado.setFont(QFont(FUENTE_MONO, 9, QFont.Bold))
+        if activo:
+            lbl_estado.setStyleSheet("""
+                color: #4ade80;
+                background-color: rgba(74, 222, 128, 0.08);
+                border: 1px solid rgba(74, 222, 128, 0.2);
+                border-radius: 10px;
+                padding: 3px 10px;
+            """)
+        else:
+            lbl_estado.setStyleSheet("""
+                color: #f87171;
+                background-color: rgba(248, 113, 113, 0.08);
+                border: 1px solid rgba(248, 113, 113, 0.2);
+                border-radius: 10px;
+                padding: 3px 10px;
+            """)
+        layout.addWidget(lbl_estado)
+
+
 class TarjetaCurso(QFrame):
     def __init__(self, curso, ciclo_anio, on_click):
         super().__init__()
@@ -162,7 +257,7 @@ class TarjetaCurso(QFrame):
         layout.addWidget(lbl_titulo)
         layout.addWidget(lbl_alumnos)
         
-        if curso['especialidad']:
+        if curso.get('especialidad'):
             lbl_esp = QLabel(f"📚 {curso['especialidad']}")
             lbl_esp.setFont(QFont(FUENTE_MONO, 10))
             lbl_esp.setStyleSheet(f"color: {COLOR_TEXTO_TENUE}; border: none; background: transparent;")
@@ -175,7 +270,7 @@ class TarjetaCurso(QFrame):
 
 
 class PanelCursos(QWidget):
-    """Alta, listado y baja de cursos (vista general y detalle)."""
+    """Alta, listado y baja de cursos (vista general y detalle con lista minimalista de alumnos)."""
 
     def __init__(self, ciclo_id: int, on_cambio=None):
         super().__init__()
@@ -292,7 +387,7 @@ class PanelCursos(QWidget):
     def _armar_vista_detalle(self):
         layout = QVBoxLayout(self.vista_detalle)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(16)
+        layout.setSpacing(14)
 
         header = QHBoxLayout()
         btn_volver = QPushButton("← Volver a cursos")
@@ -307,20 +402,85 @@ class PanelCursos(QWidget):
         self.btn_eliminar.setStyleSheet(_estilo_boton(COLOR_PELIGRO, COLOR_PELIGRO_HOVER))
         self.btn_eliminar.clicked.connect(self._eliminar_curso)
         header.addWidget(self.btn_eliminar)
-        
         layout.addLayout(header)
 
+        # Tarjeta encabezado del curso
+        tarjeta_resumen = _tarjeta()
+        layout_resumen = QVBoxLayout(tarjeta_resumen)
+        layout_resumen.setContentsMargins(20, 16, 20, 16)
+        layout_resumen.setSpacing(6)
+
         self.lbl_detalle_titulo = QLabel("...")
-        self.lbl_detalle_titulo.setFont(QFont(FUENTE_MONO, 20, QFont.Bold))
-        self.lbl_detalle_titulo.setStyleSheet(f"color: {COLOR_TEXTO};")
-        layout.addWidget(self.lbl_detalle_titulo)
+        self.lbl_detalle_titulo.setFont(QFont(FUENTE_MONO, 18, QFont.Bold))
+        self.lbl_detalle_titulo.setStyleSheet(f"color: {COLOR_TEXTO}; background: transparent; border: none;")
+        layout_resumen.addWidget(self.lbl_detalle_titulo)
 
         self.lbl_detalle_info = QLabel("...")
-        self.lbl_detalle_info.setFont(QFont(FUENTE_MONO, 12))
-        self.lbl_detalle_info.setStyleSheet(f"color: {COLOR_TEXTO_TENUE};")
-        layout.addWidget(self.lbl_detalle_info)
+        self.lbl_detalle_info.setFont(QFont(FUENTE_MONO, 11))
+        self.lbl_detalle_info.setStyleSheet(f"color: {COLOR_TEXTO_TENUE}; background: transparent; border: none;")
+        layout_resumen.addWidget(self.lbl_detalle_info)
+        layout.addWidget(tarjeta_resumen)
 
-        layout.addStretch()
+        # Barra de listado y buscador
+        barra_alumnos = QHBoxLayout()
+        self.lbl_cant_alumnos_detalle = QLabel("Alumnos Matriculados")
+        self.lbl_cant_alumnos_detalle.setFont(QFont(FUENTE_MONO, 12, QFont.Bold))
+        self.lbl_cant_alumnos_detalle.setStyleSheet(f"color: {COLOR_TEXTO};")
+        barra_alumnos.addWidget(self.lbl_cant_alumnos_detalle)
+        barra_alumnos.addStretch()
+
+        self.input_buscar_alumno = QLineEdit()
+        self.input_buscar_alumno.setPlaceholderText("🔍 Buscar por apellido, nombre o DNI...")
+        self.input_buscar_alumno.setStyleSheet(_estilo_input())
+        self.input_buscar_alumno.setFixedWidth(280)
+        self.input_buscar_alumno.textChanged.connect(self._filtrar_alumnos_detalle)
+        barra_alumnos.addWidget(self.input_buscar_alumno)
+        layout.addLayout(barra_alumnos)
+
+        # ScrollArea con lista minimalista
+        self.scroll_alumnos = QScrollArea()
+        self.scroll_alumnos.setWidgetResizable(True)
+        self.scroll_alumnos.setFrameShape(QFrame.NoFrame)
+        self.scroll_alumnos.setStyleSheet(f"""
+            QScrollArea {{
+                background: transparent;
+                border: none;
+            }}
+            QScrollBar:vertical {{
+                background: transparent;
+                width: 8px;
+                margin: 0px;
+            }}
+            QScrollBar::handle:vertical {{
+                background: {COLOR_ACENTO};
+                border-radius: 4px;
+                min-height: 20px;
+            }}
+            QScrollBar::handle:vertical:hover {{
+                background: {COLOR_ACENTO_HOVER};
+            }}
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
+                height: 0px;
+            }}
+        """)
+
+        self.contenedor_alumnos = QWidget()
+        self.contenedor_alumnos.setStyleSheet("background: transparent;")
+        self.layout_alumnos = QVBoxLayout(self.contenedor_alumnos)
+        self.layout_alumnos.setContentsMargins(0, 4, 0, 4)
+        self.layout_alumnos.setSpacing(8)
+
+        self.lbl_sin_resultados = QLabel("No se encontraron alumnos que coincidan con la búsqueda.")
+        self.lbl_sin_resultados.setFont(QFont(FUENTE_MONO, 11))
+        self.lbl_sin_resultados.setStyleSheet(f"color: {COLOR_TEXTO_TENUE}; padding: 20px;")
+        self.lbl_sin_resultados.setAlignment(Qt.AlignCenter)
+        self.lbl_sin_resultados.hide()
+        self.layout_alumnos.addWidget(self.lbl_sin_resultados)
+
+        self.scroll_alumnos.setWidget(self.contenedor_alumnos)
+        layout.addWidget(self.scroll_alumnos, stretch=1)
+
+        self.filas_alumnos = []
         self.curso_actual = None
 
     def _alternar_formulario_alta(self):
@@ -368,17 +528,75 @@ class PanelCursos(QWidget):
                 c.execute("SELECT anio FROM ciclo_lectivo WHERE id = ?", (self.ciclo_id,))
                 f = c.fetchone()
                 ciclo_anio = f["anio"] if f else datetime.date.today().year
-        except:
+        except Exception:
             ciclo_anio = datetime.date.today().year
             
         titulo = f"{curso['anio']}°{curso['division']} Ciclo {ciclo_anio}"
         self.lbl_detalle_titulo.setText(titulo)
         
-        esp = f" - {curso['especialidad']}" if curso['especialidad'] else ""
-        info = f"Turno {curso['turno']}{esp} | {curso['cantidad_alumnos']} Alumnos Activos"
+        esp = f" · {curso['especialidad']}" if curso.get('especialidad') else ""
+        info = f"Turno {curso['turno']}{esp} · {curso['cantidad_alumnos']} Alumnos Activos"
         self.lbl_detalle_info.setText(info)
         
+        # Limpiar lista anterior
+        for fila in self.filas_alumnos:
+            self.layout_alumnos.removeWidget(fila)
+            fila.deleteLater()
+        self.filas_alumnos.clear()
+
+        # Limpiar items extra (excepto lbl_sin_resultados)
+        for i in reversed(range(self.layout_alumnos.count())):
+            item = self.layout_alumnos.itemAt(i)
+            widget = item.widget()
+            if widget and widget != self.lbl_sin_resultados:
+                self.layout_alumnos.removeWidget(widget)
+                widget.deleteLater()
+            elif not widget:
+                self.layout_alumnos.removeItem(item)
+
+        self.input_buscar_alumno.blockSignals(True)
+        self.input_buscar_alumno.clear()
+        self.input_buscar_alumno.blockSignals(False)
+        self.lbl_sin_resultados.hide()
+
+        # Cargar alumnos de este curso
+        alumnos = servicio_alumno.listar_alumnos_de_curso(curso['id'])
+        self.lbl_cant_alumnos_detalle.setText(f"Alumnos Matriculados ({len(alumnos)})")
+
+        if not alumnos:
+            lbl_vacio = QLabel("No hay alumnos matriculados en este curso.")
+            lbl_vacio.setFont(QFont(FUENTE_MONO, 11))
+            lbl_vacio.setStyleSheet(f"color: {COLOR_TEXTO_TENUE}; padding: 30px;")
+            lbl_vacio.setAlignment(Qt.AlignCenter)
+            self.layout_alumnos.addWidget(lbl_vacio)
+        else:
+            for idx, al in enumerate(alumnos, 1):
+                fila = FilaAlumnoMinimalista(idx, al)
+                self.layout_alumnos.addWidget(fila)
+                self.filas_alumnos.append(fila)
+
+        self.layout_alumnos.addStretch()
         self.stack.setCurrentIndex(1)
+
+    def _filtrar_alumnos_detalle(self, texto: str):
+        texto = texto.strip().lower()
+        visibles = 0
+        for fila in self.filas_alumnos:
+            coincide = not texto or (texto in fila.texto_busqueda)
+            fila.setVisible(coincide)
+            if coincide:
+                visibles += 1
+        
+        total = len(self.filas_alumnos)
+        if total > 0 and visibles == 0:
+            self.lbl_sin_resultados.show()
+        else:
+            self.lbl_sin_resultados.hide()
+
+        if texto:
+            self.lbl_cant_alumnos_detalle.setText(f"Alumnos ({visibles} de {total})")
+        else:
+            self.lbl_cant_alumnos_detalle.setText(f"Alumnos Matriculados ({total})")
 
     def _eliminar_curso(self):
         if not self.curso_actual:
@@ -409,6 +627,16 @@ class PanelCursos(QWidget):
             return
 
         cursos = resultado.datos
+        
+        # Si estabamos en el detalle, refrescar datos
+        if self.stack.currentIndex() == 1 and self.curso_actual:
+            curso_actualizado = next((c for c in cursos if c["id"] == self.curso_actual["id"]), None)
+            if curso_actualizado:
+                self._abrir_detalle(curso_actualizado)
+            else:
+                self.stack.setCurrentIndex(0)
+                self.curso_actual = None
+
         ordinales = {1: "1ro", 2: "2do", 3: "3ro", 4: "4to", 5: "5to", 6: "6to"}
 
         por_anio = {}
@@ -479,9 +707,10 @@ class PanelCursos(QWidget):
 class PanelAlumnos(QWidget):
     """Alta, listado, baja/reactivacion y cambio de curso de alumnos."""
 
-    def __init__(self, ciclo_id: int):
+    def __init__(self, ciclo_id: int, on_cambio=None):
         super().__init__()
         self.ciclo_id = ciclo_id
+        self.on_cambio = on_cambio
         self._armar_ui()
         self.recargar_cursos()
 
@@ -690,6 +919,8 @@ class PanelAlumnos(QWidget):
             self.input_apellido.clear()
             self._alternar_formulario_alta()  # lo vuelve a ocultar
             self.recargar_tabla()
+            if self.on_cambio:
+                self.on_cambio()
         else:
             QMessageBox.warning(self, "No se pudo agregar el alumno", resultado.mensaje)
 
@@ -726,6 +957,8 @@ class PanelAlumnos(QWidget):
         resultado = servicio_alumno.dar_de_baja_alumno(numero)
         if resultado.ok:
             self.recargar_tabla()
+            if self.on_cambio:
+                self.on_cambio()
         else:
             QMessageBox.warning(self, "No se pudo dar de baja", resultado.mensaje)
 
@@ -736,6 +969,8 @@ class PanelAlumnos(QWidget):
         resultado = servicio_alumno.reactivar_alumno(numero)
         if resultado.ok:
             self.recargar_tabla()
+            if self.on_cambio:
+                self.on_cambio()
         else:
             QMessageBox.warning(self, "No se pudo reactivar", resultado.mensaje)
 
@@ -750,6 +985,8 @@ class PanelAlumnos(QWidget):
         resultado = servicio_alumno.cambiar_curso_alumno(numero, nuevo_curso_id)
         if resultado.ok:
             self.recargar_tabla()
+            if self.on_cambio:
+                self.on_cambio()
         else:
             QMessageBox.warning(self, "No se pudo cambiar de curso", resultado.mensaje)
 
@@ -873,6 +1110,7 @@ class VentanaAdmin(QMainWindow):
         self.panel_cursos = PanelCursos(
             self.ciclo_id, on_cambio=self.panel_alumnos.recargar_cursos
         )
+        self.panel_alumnos.on_cambio = self.panel_cursos.recargar
         self.panel_asistencia = PanelAsistencia(self.ciclo_id)
 
         self.stack.addWidget(self.panel_hub)        # 0 - Inicio
