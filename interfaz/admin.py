@@ -23,14 +23,15 @@ from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QLineEdit, QPushButton, QFrame, QStackedWidget, QTableWidget,
     QTableWidgetItem, QComboBox, QMessageBox, QHeaderView, QCheckBox,
-    QAbstractItemView, QButtonGroup, QTabWidget, QGridLayout, QScrollArea
+    QAbstractItemView, QButtonGroup, QTabWidget, QGridLayout, QScrollArea, QDateEdit
 )
-from PySide6.QtCore import Qt, QPoint, QSize, QRegularExpression
+from PySide6.QtCore import Qt, QPoint, QSize, QRegularExpression, QDate, QTime
 from PySide6.QtGui import QFont, QIcon, QRegularExpressionValidator
 
 from servicios import curso as servicio_curso
 from servicios import alumno as servicio_alumno
 from servicios import ciclo_lectivo as servicio_ciclo
+from servicios import lista_diaria as servicio_lista_diaria
 
 from interfaz.estilos import (
     FUENTE_MONO,
@@ -263,6 +264,162 @@ class FilaAlumnoMinimalista(QFrame):
         super().mousePressEvent(event)
 
 
+class FilaTomaLista(QFrame):
+    """Fila para registrar asistencia de un alumno en la toma de lista diaria."""
+
+    def __init__(self, index: int, alumno: dict, on_cambio=None):
+        super().__init__()
+        self.alumno = alumno
+        self.on_cambio = on_cambio
+
+        self.estado = alumno.get("estado") or "presente"
+        self.hora_llegada = alumno.get("hora_llegada")
+        self.hora_retiro = alumno.get("hora_retiro")
+        self.motivo_retiro = alumno.get("motivo_retiro")
+
+        self.texto_busqueda = f"{alumno['numero']} {alumno['apellido']} {alumno['nombre']} {alumno.get('dni') or ''}".lower()
+
+        self.setFixedHeight(54)
+        self.setStyleSheet(f"""
+            QFrame {{
+                background-color: rgba(255, 255, 255, 0.02);
+                border: 1px solid rgba(255, 255, 255, 0.05);
+                border-radius: 10px;
+            }}
+            QFrame:hover {{
+                background-color: rgba(255, 255, 255, 0.04);
+                border: 1px solid rgba(255, 255, 255, 0.10);
+            }}
+        """)
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(16, 0, 16, 0)
+        layout.setSpacing(12)
+
+        lbl_legajo = QLabel(f"#{alumno['numero']}")
+        lbl_legajo.setFont(QFont(FUENTE_MONO, 10, QFont.Bold))
+        lbl_legajo.setStyleSheet(f"""
+            color: {COLOR_TEXTO_TENUE};
+            background-color: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 6px;
+            padding: 4px 8px;
+        """)
+        layout.addWidget(lbl_legajo)
+
+        nombre_completo = f"{alumno['apellido'].upper()}, {alumno['nombre']}"
+        lbl_nombre = QLabel(nombre_completo)
+        lbl_nombre.setFont(QFont(FUENTE_MONO, 11, QFont.Bold))
+        lbl_nombre.setStyleSheet(f"color: {COLOR_TEXTO}; background: transparent; border: none;")
+        layout.addWidget(lbl_nombre, stretch=1)
+
+        dni = alumno.get("dni")
+        if dni:
+            try:
+                dni_fmt = f"{int(dni):,}".replace(",", ".")
+            except ValueError:
+                dni_fmt = str(dni)
+            txt_dni = f"DNI {dni_fmt}"
+        else:
+            txt_dni = "DNI —"
+        lbl_dni = QLabel(txt_dni)
+        lbl_dni.setFont(QFont(FUENTE_MONO, 10))
+        lbl_dni.setStyleSheet(f"color: {COLOR_TEXTO_TENUE}; background: transparent; border: none;")
+        layout.addWidget(lbl_dni)
+
+        self.lbl_hora_extra = QLabel("")
+        self.lbl_hora_extra.setFont(QFont(FUENTE_MONO, 9, QFont.Bold))
+        self.lbl_hora_extra.setStyleSheet(f"""
+            color: {COLOR_TEXTO};
+            background-color: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+            padding: 3px 8px;
+        """)
+        self.lbl_hora_extra.hide()
+        layout.addWidget(self.lbl_hora_extra)
+
+        self.btns = {}
+        for est, label, color_bg, color_border, color_txt in [
+            ("presente", "Presente", "rgba(74, 222, 128, 0.15)", "#4ade80", "#4ade80"),
+            ("ausente", "Ausente", "rgba(248, 113, 113, 0.15)", "#f87171", "#f87171"),
+            ("tarde", "Tarde", "rgba(251, 191, 36, 0.15)", "#fbbf24", "#fbbf24"),
+            ("retirado", "Retirado", "rgba(96, 165, 250, 0.15)", "#60a5fa", "#60a5fa"),
+        ]:
+            btn = QPushButton(label)
+            btn.setCursor(Qt.PointingHandCursor)
+            btn.setFont(QFont(FUENTE_MONO, 9, QFont.Bold))
+            btn.setFixedHeight(30)
+            btn.clicked.connect(lambda _, e=est: self.set_estado(e))
+            self.btns[est] = {
+                "widget": btn,
+                "color_bg": color_bg,
+                "color_border": color_border,
+                "color_txt": color_txt,
+            }
+            layout.addWidget(btn)
+
+        self._actualizar_botones()
+
+    def set_estado(self, nuevo_estado: str):
+        hora_ahora = QTime.currentTime().toString("HH:mm")
+        if nuevo_estado == "tarde" and not self.hora_llegada:
+            self.hora_llegada = hora_ahora
+        elif nuevo_estado == "retirado" and not self.hora_retiro:
+            self.hora_retiro = hora_ahora
+
+        self.estado = nuevo_estado
+        self._actualizar_botones()
+        if self.on_cambio:
+            self.on_cambio()
+
+    def _actualizar_botones(self):
+        for est, cfg in self.btns.items():
+            btn = cfg["widget"]
+            if est == self.estado:
+                btn.setStyleSheet(f"""
+                    QPushButton {{
+                        background-color: {cfg['color_bg']};
+                        border: 1px solid {cfg['color_border']};
+                        color: {cfg['color_txt']};
+                        border-radius: 6px;
+                        padding: 4px 10px;
+                    }}
+                """)
+            else:
+                btn.setStyleSheet(f"""
+                    QPushButton {{
+                        background-color: rgba(255, 255, 255, 0.03);
+                        border: 1px solid rgba(255, 255, 255, 0.05);
+                        color: {COLOR_TEXTO_TENUE};
+                        border-radius: 6px;
+                        padding: 4px 10px;
+                    }}
+                    QPushButton:hover {{
+                        background-color: rgba(255, 255, 255, 0.07);
+                        color: {COLOR_TEXTO};
+                    }}
+                """)
+
+        if self.estado == "tarde" and self.hora_llegada:
+            self.lbl_hora_extra.setText(f"🕒 {self.hora_llegada}")
+            self.lbl_hora_extra.show()
+        elif self.estado == "retirado" and self.hora_retiro:
+            self.lbl_hora_extra.setText(f"🚪 {self.hora_retiro}")
+            self.lbl_hora_extra.show()
+        else:
+            self.lbl_hora_extra.hide()
+
+    def obtener_registro(self) -> dict:
+        return {
+            "alumno_numero": self.alumno["numero"],
+            "estado": self.estado,
+            "hora_llegada": self.hora_llegada if self.estado == "tarde" else None,
+            "hora_retiro": self.hora_retiro if self.estado == "retirado" else None,
+            "motivo_retiro": self.motivo_retiro if self.estado == "retirado" else None,
+        }
+
+
 class TarjetaCurso(QFrame):
     def __init__(self, curso, ciclo_anio, on_click):
         super().__init__()
@@ -308,11 +465,12 @@ class TarjetaCurso(QFrame):
 
 
 class PanelCursos(QWidget):
-    """Alta, listado y baja de cursos (vista general y detalle con lista minimalista de alumnos)."""
+    """Alta, listado y detalle de cursos con toma de lista diaria integrada."""
 
-    def __init__(self, ciclo_id: int, on_cambio=None):
+    def __init__(self, ciclo_id: int, usuario_id: int = 1, on_cambio=None):
         super().__init__()
         self.ciclo_id = ciclo_id
+        self.usuario_id = usuario_id
         self.on_cambio = on_cambio
 
         layout_raiz = QVBoxLayout(self)
@@ -327,8 +485,12 @@ class PanelCursos(QWidget):
         self.vista_detalle = QWidget()
         self._armar_vista_detalle()
 
-        self.stack.addWidget(self.vista_general)
-        self.stack.addWidget(self.vista_detalle)
+        self.vista_toma_lista = QWidget()
+        self._armar_vista_toma_lista()
+
+        self.stack.addWidget(self.vista_general)     # 0
+        self.stack.addWidget(self.vista_detalle)     # 1
+        self.stack.addWidget(self.vista_toma_lista)  # 2
 
         self.recargar()
 
@@ -434,6 +596,12 @@ class PanelCursos(QWidget):
         btn_volver.clicked.connect(lambda: self.stack.setCurrentIndex(0))
         header.addWidget(btn_volver)
         header.addStretch()
+
+        self.btn_tomar_lista = QPushButton("📋 Tomar Lista")
+        self.btn_tomar_lista.setCursor(Qt.PointingHandCursor)
+        self.btn_tomar_lista.setStyleSheet(_estilo_boton("#1e3a29", "#284e37"))
+        self.btn_tomar_lista.clicked.connect(self._iniciar_toma_lista)
+        header.addWidget(self.btn_tomar_lista)
         
         self.btn_eliminar = QPushButton("Eliminar curso")
         self.btn_eliminar.setCursor(Qt.PointingHandCursor)
@@ -480,26 +648,11 @@ class PanelCursos(QWidget):
         self.scroll_alumnos.setWidgetResizable(True)
         self.scroll_alumnos.setFrameShape(QFrame.NoFrame)
         self.scroll_alumnos.setStyleSheet(f"""
-            QScrollArea {{
-                background: transparent;
-                border: none;
-            }}
-            QScrollBar:vertical {{
-                background: transparent;
-                width: 8px;
-                margin: 0px;
-            }}
-            QScrollBar::handle:vertical {{
-                background: {COLOR_ACENTO};
-                border-radius: 4px;
-                min-height: 20px;
-            }}
-            QScrollBar::handle:vertical:hover {{
-                background: {COLOR_ACENTO_HOVER};
-            }}
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
-                height: 0px;
-            }}
+            QScrollArea {{ background: transparent; border: none; }}
+            QScrollBar:vertical {{ background: transparent; width: 8px; margin: 0px; }}
+            QScrollBar::handle:vertical {{ background: {COLOR_ACENTO}; border-radius: 4px; min-height: 20px; }}
+            QScrollBar::handle:vertical:hover {{ background: {COLOR_ACENTO_HOVER}; }}
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0px; }}
         """)
 
         self.contenedor_alumnos = QWidget()
@@ -520,6 +673,217 @@ class PanelCursos(QWidget):
 
         self.filas_alumnos = []
         self.curso_actual = None
+
+    def _armar_vista_toma_lista(self):
+        layout = QVBoxLayout(self.vista_toma_lista)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(14)
+
+        header = QHBoxLayout()
+        btn_volver = QPushButton("← Volver al curso")
+        btn_volver.setCursor(Qt.PointingHandCursor)
+        btn_volver.setStyleSheet(_estilo_boton(COLOR_TARJETA, COLOR_ACENTO_HOVER))
+        btn_volver.clicked.connect(lambda: self.stack.setCurrentIndex(1))
+        header.addWidget(btn_volver)
+
+        self.lbl_toma_titulo = QLabel("Toma de Lista Diaria")
+        self.lbl_toma_titulo.setFont(QFont(FUENTE_MONO, 16, QFont.Bold))
+        self.lbl_toma_titulo.setStyleSheet(f"color: {COLOR_TEXTO};")
+        header.addWidget(self.lbl_toma_titulo)
+        header.addStretch()
+
+        header.addWidget(_etiqueta("Fecha:", tenue=True))
+        self.date_toma_lista = QDateEdit()
+        self.date_toma_lista.setCalendarPopup(True)
+        self.date_toma_lista.setDate(QDate.currentDate())
+        self.date_toma_lista.setStyleSheet(_estilo_input())
+        self.date_toma_lista.dateChanged.connect(self._recargar_toma_lista)
+        header.addWidget(self.date_toma_lista)
+
+        self.lbl_reloj = QLabel(f"🕒 {QTime.currentTime().toString('HH:mm')}")
+        self.lbl_reloj.setFont(QFont(FUENTE_MONO, 11, QFont.Bold))
+        self.lbl_reloj.setStyleSheet(f"""
+            color: {COLOR_TEXTO};
+            background-color: {COLOR_TARJETA};
+            border: 1px solid {COLOR_BORDE};
+            border-radius: 8px;
+            padding: 6px 12px;
+        """)
+        header.addWidget(self.lbl_reloj)
+        layout.addLayout(header)
+
+        # Barra resumen de métricas y acciones rápidas
+        barra_metricas = _tarjeta()
+        layout_m = QHBoxLayout(barra_metricas)
+        layout_m.setContentsMargins(16, 12, 16, 12)
+        layout_m.setSpacing(16)
+
+        self.lbl_metricas_toma = QLabel("...")
+        self.lbl_metricas_toma.setFont(QFont(FUENTE_MONO, 11, QFont.Bold))
+        self.lbl_metricas_toma.setStyleSheet(f"color: {COLOR_TEXTO}; background: transparent; border: none;")
+        layout_m.addWidget(self.lbl_metricas_toma)
+        layout_m.addStretch()
+
+        btn_todos_presentes = QPushButton("✓ Marcar todos presentes")
+        btn_todos_presentes.setCursor(Qt.PointingHandCursor)
+        btn_todos_presentes.setStyleSheet(_estilo_boton(COLOR_ACENTO, COLOR_ACENTO_HOVER))
+        btn_todos_presentes.clicked.connect(self._marcar_todos_presentes)
+        layout_m.addWidget(btn_todos_presentes)
+
+        layout.addWidget(barra_metricas)
+
+        # Buscador
+        fila_busqueda = QHBoxLayout()
+        self.input_buscar_toma = QLineEdit()
+        self.input_buscar_toma.setPlaceholderText("🔍 Filtrar alumno en la lista...")
+        self.input_buscar_toma.setStyleSheet(_estilo_input())
+        self.input_buscar_toma.textChanged.connect(self._filtrar_toma_lista)
+        fila_busqueda.addWidget(self.input_buscar_toma)
+        layout.addLayout(fila_busqueda)
+
+        # ScrollArea con las filas de toma de lista
+        self.scroll_toma = QScrollArea()
+        self.scroll_toma.setWidgetResizable(True)
+        self.scroll_toma.setFrameShape(QFrame.NoFrame)
+        self.scroll_toma.setStyleSheet(f"""
+            QScrollArea {{ background: transparent; border: none; }}
+            QScrollBar:vertical {{ background: transparent; width: 8px; margin: 0px; }}
+            QScrollBar::handle:vertical {{ background: {COLOR_ACENTO}; border-radius: 4px; min-height: 20px; }}
+            QScrollBar::handle:vertical:hover {{ background: {COLOR_ACENTO_HOVER}; }}
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0px; }}
+        """)
+
+        self.contenedor_toma = QWidget()
+        self.contenedor_toma.setStyleSheet("background: transparent;")
+        self.layout_toma = QVBoxLayout(self.contenedor_toma)
+        self.layout_toma.setContentsMargins(0, 4, 0, 4)
+        self.layout_toma.setSpacing(8)
+
+        self.lbl_sin_resultados_toma = QLabel("No se encontraron alumnos.")
+        self.lbl_sin_resultados_toma.setFont(QFont(FUENTE_MONO, 11))
+        self.lbl_sin_resultados_toma.setStyleSheet(f"color: {COLOR_TEXTO_TENUE}; padding: 20px;")
+        self.lbl_sin_resultados_toma.setAlignment(Qt.AlignCenter)
+        self.lbl_sin_resultados_toma.hide()
+        self.layout_toma.addWidget(self.lbl_sin_resultados_toma)
+
+        self.scroll_toma.setWidget(self.contenedor_toma)
+        layout.addWidget(self.scroll_toma, stretch=1)
+
+        # Botón Guardar inferior
+        fila_guardar = QHBoxLayout()
+        fila_guardar.addStretch()
+        self.btn_guardar_toma = QPushButton("💾 Guardar Asistencia Diaria")
+        self.btn_guardar_toma.setCursor(Qt.PointingHandCursor)
+        self.btn_guardar_toma.setFont(QFont(FUENTE_MONO, 12, QFont.Bold))
+        self.btn_guardar_toma.setStyleSheet(_estilo_boton("#1e3a29", "#284e37"))
+        self.btn_guardar_toma.clicked.connect(self._guardar_toma_lista)
+        fila_guardar.addWidget(self.btn_guardar_toma)
+        layout.addLayout(fila_guardar)
+
+        self.filas_toma = []
+
+    def _iniciar_toma_lista(self):
+        if not self.curso_actual:
+            return
+        self.lbl_toma_titulo.setText(f"Toma de Lista Diaria · {self.curso_actual['anio']}°{self.curso_actual['division']}")
+        self.lbl_reloj.setText(f"🕒 {QTime.currentTime().toString('HH:mm')}")
+        self.date_toma_lista.blockSignals(True)
+        self.date_toma_lista.setDate(QDate.currentDate())
+        self.date_toma_lista.blockSignals(False)
+        self._recargar_toma_lista()
+        self.stack.setCurrentIndex(2)
+
+    def _recargar_toma_lista(self):
+        if not self.curso_actual:
+            return
+
+        fecha = self.date_toma_lista.date().toString("yyyy-MM-dd")
+        resultado = servicio_lista_diaria.obtener_lista_diaria(self.curso_actual["id"], fecha)
+        if not resultado.ok:
+            QMessageBox.warning(self, "Error", resultado.mensaje)
+            return
+
+        for fila in self.filas_toma:
+            self.layout_toma.removeWidget(fila)
+            fila.deleteLater()
+        self.filas_toma.clear()
+
+        for i in reversed(range(self.layout_toma.count())):
+            item = self.layout_toma.itemAt(i)
+            widget = item.widget()
+            if widget and widget != self.lbl_sin_resultados_toma:
+                self.layout_toma.removeWidget(widget)
+                widget.deleteLater()
+            elif not widget:
+                self.layout_toma.removeItem(item)
+
+        self.input_buscar_toma.blockSignals(True)
+        self.input_buscar_toma.clear()
+        self.input_buscar_toma.blockSignals(False)
+        self.lbl_sin_resultados_toma.hide()
+
+        alumnos = resultado.datos["alumnos"]
+        if not alumnos:
+            lbl_vacio = QLabel("No hay alumnos matriculados en este curso.")
+            lbl_vacio.setFont(QFont(FUENTE_MONO, 11))
+            lbl_vacio.setStyleSheet(f"color: {COLOR_TEXTO_TENUE}; padding: 30px;")
+            lbl_vacio.setAlignment(Qt.AlignCenter)
+            self.layout_toma.addWidget(lbl_vacio)
+        else:
+            for idx, al in enumerate(alumnos, 1):
+                fila = FilaTomaLista(idx, al, on_cambio=self._actualizar_metricas_toma)
+                self.layout_toma.addWidget(fila)
+                self.filas_toma.append(fila)
+
+        self.layout_toma.addStretch()
+        self._actualizar_metricas_toma()
+
+    def _actualizar_metricas_toma(self):
+        p = sum(1 for f in self.filas_toma if f.estado == "presente")
+        a = sum(1 for f in self.filas_toma if f.estado == "ausente")
+        t = sum(1 for f in self.filas_toma if f.estado == "tarde")
+        r = sum(1 for f in self.filas_toma if f.estado == "retirado")
+        total = len(self.filas_toma)
+        self.lbl_metricas_toma.setText(
+            f"👥 {total} Alumnos  |  🟢 {p} Presentes  ·  🔴 {a} Ausentes  ·  🟡 {t} Tardes  ·  🔵 {r} Retirados"
+        )
+
+    def _marcar_todos_presentes(self):
+        for f in self.filas_toma:
+            f.set_estado("presente")
+        self._actualizar_metricas_toma()
+
+    def _filtrar_toma_lista(self, texto: str):
+        texto = texto.strip().lower()
+        visibles = 0
+        for fila in self.filas_toma:
+            coincide = not texto or (texto in fila.texto_busqueda)
+            fila.setVisible(coincide)
+            if coincide:
+                visibles += 1
+
+        total = len(self.filas_toma)
+        if total > 0 and visibles == 0:
+            self.lbl_sin_resultados_toma.show()
+        else:
+            self.lbl_sin_resultados_toma.hide()
+
+    def _guardar_toma_lista(self):
+        if not self.curso_actual or not self.filas_toma:
+            return
+
+        fecha = self.date_toma_lista.date().toString("yyyy-MM-dd")
+        registros = [f.obtener_registro() for f in self.filas_toma]
+        resultado = servicio_lista_diaria.guardar_lista_diaria(fecha, registros, self.usuario_id)
+
+        if resultado.ok:
+            QMessageBox.information(
+                self, "Asistencia Guardada", f"Se guardó la lista diaria del día {fecha} con éxito."
+            )
+            if self.on_cambio:
+                self.on_cambio()
+        else:
+            QMessageBox.warning(self, "No se pudo guardar", resultado.mensaje)
 
     def _alternar_formulario_alta(self):
         if self.tarjeta_form.isHidden():
@@ -576,13 +940,11 @@ class PanelCursos(QWidget):
         info = f"Turno {curso['turno']}{esp} · {curso['cantidad_alumnos']} Alumnos Activos"
         self.lbl_detalle_info.setText(info)
         
-        # Limpiar lista anterior
         for fila in self.filas_alumnos:
             self.layout_alumnos.removeWidget(fila)
             fila.deleteLater()
         self.filas_alumnos.clear()
 
-        # Limpiar items extra (excepto lbl_sin_resultados)
         for i in reversed(range(self.layout_alumnos.count())):
             item = self.layout_alumnos.itemAt(i)
             widget = item.widget()
@@ -597,7 +959,6 @@ class PanelCursos(QWidget):
         self.input_buscar_alumno.blockSignals(False)
         self.lbl_sin_resultados.hide()
 
-        # Cargar alumnos de este curso
         alumnos = servicio_alumno.listar_alumnos_de_curso(curso['id'])
         self.lbl_cant_alumnos_detalle.setText(f"Alumnos Matriculados ({len(alumnos)})")
 
@@ -666,7 +1027,6 @@ class PanelCursos(QWidget):
 
         cursos = resultado.datos
         
-        # Si estabamos en el detalle, refrescar datos
         if self.stack.currentIndex() == 1 and self.curso_actual:
             curso_actualizado = next((c for c in cursos if c["id"] == self.curso_actual["id"]), None)
             if curso_actualizado:
@@ -674,6 +1034,8 @@ class PanelCursos(QWidget):
             else:
                 self.stack.setCurrentIndex(0)
                 self.curso_actual = None
+        elif self.stack.currentIndex() == 2 and self.curso_actual:
+            self._recargar_toma_lista()
 
         ordinales = {1: "1ro", 2: "2do", 3: "3ro", 4: "4to", 5: "5to", 6: "6to"}
 
@@ -1253,8 +1615,9 @@ class VentanaAdmin(QMainWindow):
 
         self.panel_hub = PanelHub(self.ciclo_id)
         self.panel_alumnos = PanelAlumnos(self.ciclo_id)
+        usuario_id = self.usuario.get("id", 1) if self.usuario else 1
         self.panel_cursos = PanelCursos(
-            self.ciclo_id, on_cambio=self.panel_alumnos.recargar_cursos
+            self.ciclo_id, usuario_id=usuario_id, on_cambio=self.panel_alumnos.recargar_cursos
         )
         self.panel_alumnos.on_cambio = self.panel_cursos.recargar
         self.panel_asistencia = PanelAsistencia(self.ciclo_id)
