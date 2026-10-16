@@ -653,16 +653,6 @@ class PanelCursos(QWidget):
         header.addWidget(self.btn_eliminar)
         layout.addLayout(header)
 
-    def _abrir_dialogo_horarios(self):
-        if not getattr(self, "curso_actual", None):
-            return
-        from interfaz.dialogo_horarios import DialogoHorarios
-        usr = getattr(self, "usuario_actual", None) or {"id": self.usuario_id, "rol": getattr(self, "rol_actual", "admin")}
-        dialogo = DialogoHorarios(self.curso_actual, usuario_actual=usr, parent=self)
-        if hasattr(self, "on_horario_actualizado") and callable(self.on_horario_actualizado):
-            dialogo.horarios_actualizados.connect(self.on_horario_actualizado)
-        dialogo.exec()
-
         # Tarjeta encabezado del curso
         tarjeta_resumen = _tarjeta()
         layout_resumen = QVBoxLayout(tarjeta_resumen)
@@ -726,6 +716,16 @@ class PanelCursos(QWidget):
 
         self.filas_alumnos = []
         self.curso_actual = None
+
+    def _abrir_dialogo_horarios(self):
+        if not getattr(self, "curso_actual", None):
+            return
+        from interfaz.dialogo_horarios import DialogoHorarios
+        usr = getattr(self, "usuario_actual", None) or {"id": self.usuario_id, "rol": getattr(self, "rol_actual", "admin")}
+        dialogo = DialogoHorarios(self.curso_actual, usuario_actual=usr, parent=self)
+        if hasattr(self, "on_horario_actualizado") and callable(self.on_horario_actualizado):
+            dialogo.horarios_actualizados.connect(self.on_horario_actualizado)
+        dialogo.exec()
 
     def _armar_vista_toma_lista(self):
         layout = QVBoxLayout(self.vista_toma_lista)
