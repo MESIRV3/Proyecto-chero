@@ -1,4 +1,4 @@
-"""Metricas para el HUB del panel de administracion."""
+"""Metricas para el HUB del panel de administracion y roles."""
 from datetime import date
 from database.conexion import conexion
 from database.resultado import Resultado
@@ -13,12 +13,18 @@ def obtener_metricas_hub(ciclo_id):
             c.execute('SELECT anio FROM ciclo_lectivo WHERE id = ?', (ciclo_id,))
             f = c.fetchone()
             ciclo_anio = f['anio'] if f else date.today().year
+
+            # Matricula general
             c.execute('SELECT COUNT(*) AS t FROM alumno a JOIN curso cu ON a.curso_id=cu.id WHERE cu.ciclo_id=? AND a.activo=1', (ciclo_id,))
             alumnos_activos = c.fetchone()['t'] or 0
+
             c.execute('SELECT COUNT(*) AS t FROM alumno a JOIN curso cu ON a.curso_id=cu.id WHERE cu.ciclo_id=? AND a.activo=0', (ciclo_id,))
             alumnos_baja = c.fetchone()['t'] or 0
+
             c.execute('SELECT COUNT(*) AS t FROM curso WHERE ciclo_id=?', (ciclo_id,))
             total_cursos = c.fetchone()['t'] or 0
+
+            # Asistencias por materia
             c.execute(
                 'SELECT COUNT(*) AS t FROM asistencia a '
                 'JOIN materia m ON m.id = a.materia_id '
@@ -27,6 +33,7 @@ def obtener_metricas_hub(ciclo_id):
                 (ciclo_id, hoy),
             )
             asistencias_hoy = c.fetchone()['t'] or 0
+
             c.execute(
                 'SELECT COUNT(*) AS t FROM asistencia a '
                 'JOIN materia m ON m.id = a.materia_id '
@@ -35,6 +42,43 @@ def obtener_metricas_hub(ciclo_id):
                 (ciclo_id, hace_7_dias),
             )
             asistencias_semana = c.fetchone()['t'] or 0
+
+            # Metricas de Lista Diaria (Preceptoría y Dirección)
+            c.execute("""
+                SELECT 
+                    SUM(CASE WHEN ld.estado = 'presente' THEN 1 ELSE 0 END) AS presentes,
+                    SUM(CASE WHEN ld.estado = 'ausente' THEN 1 ELSE 0 END) AS ausentes,
+                    SUM(CASE WHEN ld.estado = 'tarde' THEN 1 ELSE 0 END) AS tardes,
+                    SUM(CASE WHEN ld.estado = 'retirado' THEN 1 ELSE 0 END) AS retirados,
+                    COUNT(DISTINCT a.curso_id) AS cursos_tomados
+                FROM lista_diaria ld
+                JOIN alumno a ON a.numero = ld.alumno_numero
+                JOIN curso cu ON cu.id = a.curso_id
+                WHERE cu.ciclo_id = ? AND ld.fecha = ?
+            """, (ciclo_id, hoy))
+            ld_row = c.fetchone()
+            presentes_hoy = ld_row['presentes'] or 0
+            ausentes_hoy = ld_row['ausentes'] or 0
+            tardes_hoy = ld_row['tardes'] or 0
+            retirados_hoy = ld_row['retirados'] or 0
+            cursos_con_lista_hoy = ld_row['cursos_tomados'] or 0
+
+            total_registros_hoy = presentes_hoy + ausentes_hoy + tardes_hoy + retirados_hoy
+            if total_registros_hoy > 0:
+                presentismo_pct = round(((presentes_hoy + tardes_hoy) * 100.0) / total_registros_hoy, 1)
+                presentismo_texto = f"{presentismo_pct}%"
+            else:
+                presentismo_texto = "—"
+
+            # Materias totales
+            c.execute("""
+                SELECT COUNT(*) AS t 
+                FROM materia m 
+                JOIN curso cu ON cu.id = m.curso_id 
+                WHERE cu.ciclo_id = ?
+            """, (ciclo_id,))
+            total_materias = c.fetchone()['t'] or 0
+
         return Resultado.exito('Metricas obtenidas', datos={
             'alumnos_activos': alumnos_activos,
             'alumnos_baja': alumnos_baja,
@@ -42,6 +86,13 @@ def obtener_metricas_hub(ciclo_id):
             'asistencias_hoy': asistencias_hoy,
             'asistencias_semana': asistencias_semana,
             'ciclo_anio': ciclo_anio,
+            'presentes_hoy': presentes_hoy,
+            'ausentes_hoy': ausentes_hoy,
+            'tardes_hoy': tardes_hoy,
+            'retirados_hoy': retirados_hoy,
+            'cursos_con_lista_hoy': cursos_con_lista_hoy,
+            'presentismo_texto': presentismo_texto,
+            'total_materias': total_materias,
         })
     except Exception as e:
         return Resultado.error(f'Error al obtener metricas: {e}')

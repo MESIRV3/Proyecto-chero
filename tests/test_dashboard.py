@@ -171,6 +171,13 @@ class TestDashboardMetrics(unittest.TestCase):
                 "asistencias_hoy",
                 "asistencias_semana",
                 "ciclo_anio",
+                "presentes_hoy",
+                "ausentes_hoy",
+                "tardes_hoy",
+                "retirados_hoy",
+                "cursos_con_lista_hoy",
+                "presentismo_texto",
+                "total_materias",
             },
         )
         self.assertEqual(resultado.datos["ciclo_anio"], 2030)

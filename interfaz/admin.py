@@ -494,6 +494,17 @@ class PanelCursos(QWidget):
 
         self.recargar()
 
+    def cambiar_rol(self, nuevo_rol: str):
+        """Ajusta permisos y vistas en el panel de cursos segun el rol."""
+        self.rol_actual = nuevo_rol
+        if hasattr(self, "btn_toggle_alta"):
+            if nuevo_rol in ("admin", "directivo"):
+                self.btn_toggle_alta.show()
+            else:
+                self.btn_toggle_alta.hide()
+                if hasattr(self, "tarjeta_form"):
+                    self.tarjeta_form.hide()
+
     def _armar_vista_general(self):
         layout = QVBoxLayout(self.vista_general)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -1533,6 +1544,7 @@ class VentanaAdmin(QMainWindow):
 
         self._armar_sidebar_y_stack()
         layout_raiz.addWidget(self.cuerpo)
+        self._al_cambiar_rol_vista()
 
     def _armar_sidebar_y_stack(self):
         """Construye el sidebar de navegacion y el QStackedWidget de paneles."""
@@ -1587,6 +1599,7 @@ class VentanaAdmin(QMainWindow):
 
         self.grupo_nav = QButtonGroup(self)
         self.grupo_nav.setExclusive(True)
+        self.botones_nav = []
         nombres_nav = ["Inicio", "Cursos", "Alumnos", "Asistencia"]
         for idx, nombre in enumerate(nombres_nav):
             btn = QPushButton(nombre)
@@ -1594,6 +1607,7 @@ class VentanaAdmin(QMainWindow):
             btn.setCursor(Qt.PointingHandCursor)
             self.grupo_nav.addButton(btn, idx)
             layout_sidebar.addWidget(btn)
+            self.botones_nav.append(btn)
 
         layout_sidebar.addStretch()
 
@@ -1631,6 +1645,7 @@ class VentanaAdmin(QMainWindow):
         self.stack.currentChanged.connect(lambda i: self.grupo_nav.button(i).setChecked(True))
         self.panel_hub.navegar_a_alumnos.connect(lambda: self.stack.setCurrentIndex(2))
         self.panel_hub.navegar_a_cursos.connect(lambda: self.stack.setCurrentIndex(1))
+        self.panel_hub.navegar_a_asistencia.connect(lambda: self.stack.setCurrentIndex(3))
 
         self.stack.setCurrentIndex(0)
         self.grupo_nav.button(0).setChecked(True)
@@ -1642,13 +1657,53 @@ class VentanaAdmin(QMainWindow):
         layout_cuerpo.addWidget(self.sidebar)
         layout_cuerpo.addWidget(self.stack, stretch=1)
 
-    def _actualizar_footer_usuario(self):
+    def _actualizar_footer_usuario(self, rol_vista: str | None = None):
         if self.usuario:
             nombre = self.usuario.get("nombre", "Usuario")
-            rol = self.usuario.get("rol", "")
-            self.label_usuario.setText(f"{nombre}\n{rol}")
+            rol_real = self.usuario.get("rol", "admin")
+            if rol_vista and rol_vista != rol_real:
+                self.label_usuario.setText(f"{nombre} ({rol_real})\nVista: {rol_vista.capitalize()}")
+            else:
+                self.label_usuario.setText(f"{nombre}\n{rol_real.capitalize()}")
         else:
-            self.label_usuario.setText("Sesion local\nModo standalone")
+            rol_txt = rol_vista.capitalize() if rol_vista else "Admin"
+            self.label_usuario.setText(f"Sesion local\nVista: {rol_txt}")
+
+    def _al_cambiar_rol_vista(self, index: int = 0):
+        if not hasattr(self, "combo_rol_vista"):
+            return
+        rol = self.combo_rol_vista.currentData()
+        if not rol:
+            return
+
+        titulos_rol = {
+            "admin": "Panel de Administrador",
+            "directivo": "Panel Directivo",
+            "preceptor": "Panel de Preceptoría",
+            "profesor": "Panel Docente",
+        }
+        if hasattr(self, "label_titulo_barra"):
+            self.label_titulo_barra.setText(titulos_rol.get(rol, "Panel de Control"))
+
+        if hasattr(self, "panel_hub"):
+            self.panel_hub.cambiar_rol(rol)
+
+        self._actualizar_footer_usuario(rol_vista=rol)
+        self._aplicar_permisos_vista_rol(rol)
+
+    def _aplicar_permisos_vista_rol(self, rol: str):
+        # 0: Inicio, 1: Cursos, 2: Alumnos, 3: Asistencia
+        if hasattr(self, "botones_nav") and len(self.botones_nav) >= 4:
+            btn_alumnos = self.botones_nav[2]
+            if rol == "profesor":
+                btn_alumnos.hide()
+                if self.stack.currentIndex() == 2:
+                    self.stack.setCurrentIndex(0)
+            else:
+                btn_alumnos.show()
+
+        if hasattr(self, "panel_cursos") and hasattr(self.panel_cursos, "cambiar_rol"):
+            self.panel_cursos.cambiar_rol(rol)
 
     def _cerrar_sesion(self):
         """Cierra el admin y abre una nueva ventana de login; nunca termina la app."""
@@ -1664,12 +1719,64 @@ class VentanaAdmin(QMainWindow):
 
         layout = QHBoxLayout(barra)
         layout.setContentsMargins(20, 0, 12, 0)
-        layout.setSpacing(8)
+        layout.setSpacing(10)
 
-        titulo = QLabel("Panel de Administrador")
-        titulo.setFont(QFont(FUENTE_MONO, 12, QFont.Bold))
-        titulo.setStyleSheet(f"color: {COLOR_TEXTO};")
-        layout.addWidget(titulo)
+        self.label_titulo_barra = QLabel("Panel de Administrador")
+        self.label_titulo_barra.setFont(QFont(FUENTE_MONO, 11, QFont.Bold))
+        self.label_titulo_barra.setStyleSheet(f"color: {COLOR_TEXTO};")
+        layout.addWidget(self.label_titulo_barra)
+
+        layout.addSpacing(8)
+
+        self.lbl_vista = QLabel("Vista:")
+        self.lbl_vista.setFont(QFont(FUENTE_MONO, 10))
+        self.lbl_vista.setStyleSheet(f"color: {COLOR_TEXTO_TENUE};")
+        layout.addWidget(self.lbl_vista)
+
+        self.combo_rol_vista = QComboBox()
+        self.combo_rol_vista.addItem("👑 Administrador", "admin")
+        self.combo_rol_vista.addItem("👔 Directivo", "directivo")
+        self.combo_rol_vista.addItem("📋 Preceptor", "preceptor")
+        self.combo_rol_vista.addItem("👨‍🏫 Profesor", "profesor")
+        self.combo_rol_vista.setCursor(Qt.PointingHandCursor)
+        self.combo_rol_vista.setFixedHeight(28)
+        self.combo_rol_vista.setStyleSheet(f"""
+            QComboBox {{
+                background-color: {COLOR_INPUT};
+                border: 1px solid {COLOR_BORDE};
+                border-radius: 6px;
+                color: {COLOR_TEXTO};
+                padding: 2px 10px;
+                font-family: '{FUENTE_MONO}';
+                font-size: 11px;
+                font-weight: bold;
+            }}
+            QComboBox:hover {{
+                border: 1px solid #3a3a5a;
+                background-color: {COLOR_ACENTO};
+            }}
+            QComboBox::drop-down {{
+                subcontrol-origin: padding;
+                subcontrol-position: top right;
+                width: 18px;
+                border-left-width: 0px;
+            }}
+            QComboBox QAbstractItemView {{
+                background-color: #141416;
+                color: {COLOR_TEXTO};
+                selection-background-color: {COLOR_ACENTO};
+                border: 1px solid {COLOR_BORDE};
+                padding: 4px;
+            }}
+        """)
+        self.combo_rol_vista.currentIndexChanged.connect(self._al_cambiar_rol_vista)
+        layout.addWidget(self.combo_rol_vista)
+
+        # Si el usuario logueado NO es admin, no puede cambiar de rol
+        if self.usuario and self.usuario.get("rol") != "admin":
+            self.lbl_vista.hide()
+            self.combo_rol_vista.hide()
+
         layout.addStretch()
 
         estilo_btn_ventana = """
