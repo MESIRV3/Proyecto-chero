@@ -295,7 +295,7 @@ class PanelHub(QWidget):
 
             self.tabla_cursos.setColumnCount(5)
             self.tabla_cursos.setHorizontalHeaderLabels(
-                ["Curso", "Materia(s)", "Horario / Bloques", "Turno", "Alumnos"]
+                ["Curso", "Materia(s)", "Horario", "Turno", "Alumnos"]
             )
             self.tabla_cursos.clearSpans()
 

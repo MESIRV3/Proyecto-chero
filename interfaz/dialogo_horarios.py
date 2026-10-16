@@ -35,6 +35,7 @@ from interfaz.estilos import (
     _estilo_boton,
     _estilo_input,
     _estilo_tabla,
+    _estilo_scrollbar,
     _etiqueta,
     _tarjeta,
 )
@@ -62,7 +63,7 @@ class DialogoHorarios(QDialog):
         self.setWindowTitle(f"Horarios de Clase — {nombre_curso}")
         self.setMinimumSize(700, 560)
         self.resize(760, 620)
-        self.setStyleSheet(f"background-color: {COLOR_FONDO}; color: {COLOR_TEXTO};")
+        self.setStyleSheet(f"background-color: {COLOR_FONDO}; color: {COLOR_TEXTO};\n{_estilo_scrollbar()}")
 
         self._armar_ui(nombre_curso)
         self.recargar_materias()
@@ -114,7 +115,7 @@ class DialogoHorarios(QDialog):
 
         self.tabla_horarios = QTableWidget(0, 6)
         self.tabla_horarios.setHorizontalHeaderLabels(
-            ["Día", "Bloque", "Horario", "Materia", "Profesor", "Acción"]
+            ["Día", "Hora", "Horario", "Materia", "Profesor", "Acción"]
         )
         self.tabla_horarios.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.tabla_horarios.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
@@ -133,7 +134,7 @@ class DialogoHorarios(QDialog):
         form_layout.setContentsMargins(18, 14, 18, 14)
         form_layout.setSpacing(10)
 
-        lbl_tit_form = QLabel("➕ Agregar nuevo bloque horario")
+        lbl_tit_form = QLabel("➕ Agregar nuevo horario de clase")
         lbl_tit_form.setFont(QFont(FUENTE_MONO, 11, QFont.Bold))
         lbl_tit_form.setStyleSheet(f"color: {COLOR_TEXTO};")
         form_layout.addWidget(lbl_tit_form)
@@ -149,12 +150,13 @@ class DialogoHorarios(QDialog):
             self.combo_dia.addItem(dia_nom, dia_num)
         grid.addWidget(self.combo_dia, 0, 1)
 
-        # 2. Bloque
-        grid.addWidget(_etiqueta("Bloque:", tenue=True), 0, 2)
+        # 2. Hora de clase
+        grid.addWidget(_etiqueta("Hora:", tenue=True), 0, 2)
         self.combo_bloque = QComboBox()
         self.combo_bloque.setStyleSheet(_estilo_input())
         for b in range(1, 9):
-            self.combo_bloque.addItem(f"Bloque {b}", b)
+            sug_ini, _ = servicio_horario.BLOQUES_DEFAULT.get(b, ("", ""))
+            self.combo_bloque.addItem(f"{b}° Hora ({sug_ini})", b)
         self.combo_bloque.currentIndexChanged.connect(self._al_cambiar_bloque)
         grid.addWidget(self.combo_bloque, 0, 3)
 
@@ -257,7 +259,7 @@ class DialogoHorarios(QDialog):
         self.tabla_horarios.setRowCount(len(horarios))
         for fila, h in enumerate(horarios):
             dia_txt = servicio_horario.DIAS_SEMANA.get(h["dia_semana"], f"Día {h['dia_semana']}")
-            bloque_txt = f"B{h['numero_bloque']}"
+            bloque_txt = f"{h['numero_bloque']}° Hora"
             rango_txt = f"{h['hora_inicio']} - {h['hora_fin']}"
             mat_txt = h.get("materia_nombre") or "—"
             prof_txt = h.get("profesor_nombre") or "—"

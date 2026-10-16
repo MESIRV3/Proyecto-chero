@@ -54,6 +54,58 @@ def _estilo_boton(color=COLOR_ACENTO, color_hover=COLOR_ACENTO_HOVER):
     """
 
 
+def _estilo_scrollbar():
+    return f"""
+        QScrollBar:vertical {{
+            background: transparent;
+            width: 8px;
+            margin: 0px 2px 0px 2px;
+            border-radius: 4px;
+        }}
+        QScrollBar::handle:vertical {{
+            background: {COLOR_ACENTO};
+            border-radius: 4px;
+            min-height: 24px;
+        }}
+        QScrollBar::handle:vertical:hover {{
+            background: {COLOR_ACENTO_HOVER};
+        }}
+        QScrollBar::handle:vertical:pressed {{
+            background: #4a4a52;
+        }}
+        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
+            height: 0px;
+            background: transparent;
+            border: none;
+        }}
+        QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{
+            background: transparent;
+        }}
+        QScrollBar:horizontal {{
+            background: transparent;
+            height: 8px;
+            margin: 2px 0px 2px 0px;
+            border-radius: 4px;
+        }}
+        QScrollBar::handle:horizontal {{
+            background: {COLOR_ACENTO};
+            border-radius: 4px;
+            min-width: 24px;
+        }}
+        QScrollBar::handle:horizontal:hover {{
+            background: {COLOR_ACENTO_HOVER};
+        }}
+        QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{
+            width: 0px;
+            background: transparent;
+            border: none;
+        }}
+        QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {{
+            background: transparent;
+        }}
+    """
+
+
 def _estilo_tabla():
     return f"""
         QTableWidget {{
@@ -72,6 +124,7 @@ def _estilo_tabla():
             font-weight: bold;
         }}
         QTableWidget::item:selected {{ background-color: #2a2a3a; }}
+        {_estilo_scrollbar()}
     """
 
 

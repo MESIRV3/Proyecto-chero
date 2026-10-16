@@ -48,6 +48,7 @@ from interfaz.estilos import (
     _estilo_input,
     _estilo_boton,
     _estilo_tabla,
+    _estilo_scrollbar,
     _tarjeta,
     _etiqueta,
 )
@@ -1567,7 +1568,7 @@ class VentanaAdmin(QMainWindow):
         self.drag_offset = QPoint()
 
         self.central = QWidget(self)
-        self.central.setStyleSheet(f"background-color: {COLOR_FONDO};")
+        self.central.setStyleSheet(f"background-color: {COLOR_FONDO};\n{_estilo_scrollbar()}")
         self.setCentralWidget(self.central)
 
         layout_raiz = QVBoxLayout(self.central)

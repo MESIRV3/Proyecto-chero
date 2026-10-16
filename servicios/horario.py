@@ -263,12 +263,13 @@ def obtener_cursos_del_dia_por_profesor(
                     if m and m not in materias_unicas:
                         materias_unicas.append(m)
 
-                # Resumen de bloques y franja horaria
+                # Resumen de horas y franja horaria
                 if horarios:
                     min_hora = horarios[0]["hora_inicio"]
                     max_hora = horarios[-1]["hora_fin"]
-                    bloques_str = ", ".join(f"B{h['numero_bloque']}" for h in horarios)
-                    horarios_resumen = f"{min_hora} - {max_hora} ({bloques_str})"
+                    horas_str = ", ".join(f"{h['numero_bloque']}°" for h in horarios)
+                    plural = "horas" if len(horarios) > 1 else "hora"
+                    horarios_resumen = f"{min_hora} - {max_hora} ({horas_str} {plural})"
                 else:
                     horarios_resumen = "—"
 
