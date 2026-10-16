@@ -102,6 +102,24 @@ def cargar_datos():
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """, (curso_5_1_id, 1, bloque, inicio, fin, recreo, mat_id, usr_id))
 
+    # Grilla del jueves (para pruebas en el dia actual)
+    horario_5a_jueves = [
+        (1, "07:30", "08:10", 0, 1, 2),        # Matematicas - Laura
+        (2, "08:10", "08:50", 0, 1, 2),        # Matematicas - Laura
+        (0, "08:50", "09:00", 1, None, None),  # Recreo
+        (3, "09:00", "09:40", 0, 0, 1),        # Ingles      - Carlos
+        (4, "09:40", "10:20", 0, 0, 1),        # Ingles      - Carlos
+    ]
+    for bloque, inicio, fin, recreo, mat_idx, usr_idx in horario_5a_jueves:
+        mat_id = materia_ids[mat_idx] if mat_idx is not None else None
+        usr_id = usuarios_ids[usr_idx] if usr_idx is not None else None
+        cursor.execute("""
+            INSERT INTO horario
+                (curso_id, dia_semana, numero_bloque, hora_inicio, hora_fin,
+                 es_recreo, materia_id, usuario_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (curso_5_1_id, 4, bloque, inicio, fin, recreo, mat_id, usr_id))
+
     # 6. ALUMNOS (25 alumnos por cada uno de los 6 cursos = 150 alumnos)
     nombres_pool = [
         "Lucas", "Martina", "Mateo", "Valentina", "Santiago",

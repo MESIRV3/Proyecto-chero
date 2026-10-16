@@ -27,6 +27,7 @@ from interfaz.estilos import (
     _tarjeta,
 )
 from servicios import curso as servicio_curso
+from servicios import horario as servicio_horario
 from servicios.dashboard import obtener_metricas_hub
 
 
@@ -37,9 +38,10 @@ class PanelHub(QWidget):
     navegar_a_cursos = Signal()
     navegar_a_asistencia = Signal()
 
-    def __init__(self, ciclo_id: int | None):
+    def __init__(self, ciclo_id: int | None, profesor_id: int | None = None):
         super().__init__()
         self.ciclo_id = ciclo_id
+        self.profesor_id = profesor_id
         self.rol_actual = "admin"
         self._anio_ciclo = date.today().year
         self._armar_ui()
@@ -144,9 +146,11 @@ class PanelHub(QWidget):
         card.valor_label = lbl_valor
         return card
 
-    def cambiar_rol(self, nuevo_rol: str):
+    def cambiar_rol(self, nuevo_rol: str, profesor_id: int | None = None):
         """Cambia el rol activo en el hub y reconfigura las tarjetas e informacion mostrada."""
         self.rol_actual = nuevo_rol
+        if profesor_id is not None:
+            self.profesor_id = profesor_id
         self._cargar_datos()
 
     def showEvent(self, event):
@@ -284,25 +288,84 @@ class PanelHub(QWidget):
             self.fila_kpi_2.addWidget(c)
 
     def _cargar_tabla_cursos(self):
-        resultado = servicio_curso.listar_cursos(self.ciclo_id)
-        if not resultado.ok:
-            self._mostrar_error(resultado.mensaje)
-            self.tabla_cursos.setRowCount(0)
-            return
+        if self.rol_actual == "profesor":
+            dia_hoy = date.today().isoweekday()
+            dia_nombre = servicio_horario.DIAS_SEMANA.get(dia_hoy, "Día actual")
+            self.lbl_titulo_tabla.setText(f"📅 Cursos a cargo hoy ({dia_nombre})")
 
-        cursos = resultado.datos
-        self.tabla_cursos.setRowCount(len(cursos))
-        for fila, curso in enumerate(cursos):
-            nombre = servicio_curso.obtener_nombre_curso(curso)
-            especialidad = curso.get("especialidad") or "-"
-            valores = [
-                nombre,
-                especialidad,
-                curso.get("turno", "-"),
-                str(curso.get("cantidad_alumnos", 0)),
-            ]
-            for col, valor in enumerate(valores):
-                self.tabla_cursos.setItem(fila, col, QTableWidgetItem(str(valor)))
+            self.tabla_cursos.setColumnCount(5)
+            self.tabla_cursos.setHorizontalHeaderLabels(
+                ["Curso", "Materia(s)", "Horario / Bloques", "Turno", "Alumnos"]
+            )
+            self.tabla_cursos.clearSpans()
+
+            profesor_id = self.profesor_id
+            if profesor_id is None:
+                try:
+                    from database.conexion import conexion
+                    with conexion() as conn:
+                        cur = conn.cursor()
+                        cur.execute("SELECT id FROM usuario WHERE rol = 'profesor' AND activo = 1 ORDER BY id LIMIT 1")
+                        r = cur.fetchone()
+                        profesor_id = r["id"] if r else 1
+                except Exception:
+                    profesor_id = 1
+
+            resultado = servicio_horario.obtener_cursos_del_dia_por_profesor(
+                self.ciclo_id, profesor_id, dia_hoy
+            )
+            if not resultado.ok:
+                self._mostrar_error(resultado.mensaje)
+                self.tabla_cursos.setRowCount(0)
+                return
+
+            cursos = resultado.datos.get("cursos", [])
+            if not cursos:
+                self.tabla_cursos.setRowCount(1)
+                item_vacio = QTableWidgetItem(f"No tenés cursos asignados para el día de hoy ({dia_nombre}).")
+                item_vacio.setTextAlignment(Qt.AlignCenter)
+                self.tabla_cursos.setItem(0, 0, item_vacio)
+                self.tabla_cursos.setSpan(0, 0, 1, 5)
+            else:
+                self.tabla_cursos.setRowCount(len(cursos))
+                for fila, curso in enumerate(cursos):
+                    nombre = servicio_curso.obtener_nombre_curso(curso)
+                    valores = [
+                        nombre,
+                        curso.get("materias_texto", "—"),
+                        curso.get("horarios_texto", "—"),
+                        curso.get("turno", "—"),
+                        str(curso.get("cantidad_alumnos", 0)),
+                    ]
+                    for col, valor in enumerate(valores):
+                        self.tabla_cursos.setItem(fila, col, QTableWidgetItem(str(valor)))
+        else:
+            self.lbl_titulo_tabla.setText("Resumen de Cursos del Ciclo")
+            self.tabla_cursos.setColumnCount(4)
+            self.tabla_cursos.setHorizontalHeaderLabels(
+                ["Curso", "Especialidad", "Turno", "Alumnos Activos"]
+            )
+            self.tabla_cursos.clearSpans()
+
+            resultado = servicio_curso.listar_cursos(self.ciclo_id)
+            if not resultado.ok:
+                self._mostrar_error(resultado.mensaje)
+                self.tabla_cursos.setRowCount(0)
+                return
+
+            cursos = resultado.datos
+            self.tabla_cursos.setRowCount(len(cursos))
+            for fila, curso in enumerate(cursos):
+                nombre = servicio_curso.obtener_nombre_curso(curso)
+                especialidad = curso.get("especialidad") or "-"
+                valores = [
+                    nombre,
+                    especialidad,
+                    curso.get("turno", "-"),
+                    str(curso.get("cantidad_alumnos", 0)),
+                ]
+                for col, valor in enumerate(valores):
+                    self.tabla_cursos.setItem(fila, col, QTableWidgetItem(str(valor)))
 
     def _mostrar_error(self, mensaje: str):
         self.label_error.setText(f"Error al cargar datos: {mensaje}")

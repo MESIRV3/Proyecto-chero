@@ -467,11 +467,14 @@ class TarjetaCurso(QFrame):
 class PanelCursos(QWidget):
     """Alta, listado y detalle de cursos con toma de lista diaria integrada."""
 
-    def __init__(self, ciclo_id: int, usuario_id: int = 1, on_cambio=None):
+    def __init__(self, ciclo_id: int, usuario_id: int = 1, on_cambio=None, usuario_actual: dict | None = None):
         super().__init__()
         self.ciclo_id = ciclo_id
         self.usuario_id = usuario_id
+        self.usuario_actual = usuario_actual or {"id": usuario_id, "rol": "admin"}
+        self.rol_actual = self.usuario_actual.get("rol", "admin")
         self.on_cambio = on_cambio
+        self.on_horario_actualizado = None
 
         layout_raiz = QVBoxLayout(self)
         layout_raiz.setContentsMargins(20, 20, 20, 20)
@@ -494,9 +497,16 @@ class PanelCursos(QWidget):
 
         self.recargar()
 
-    def cambiar_rol(self, nuevo_rol: str):
+    def cambiar_rol(self, nuevo_rol: str, usuario_id: int | None = None):
         """Ajusta permisos y vistas en el panel de cursos segun el rol."""
         self.rol_actual = nuevo_rol
+        if usuario_id is not None:
+            self.usuario_id = usuario_id
+        if hasattr(self, "usuario_actual") and self.usuario_actual:
+            self.usuario_actual["rol"] = nuevo_rol
+            if usuario_id is not None:
+                self.usuario_actual["id"] = usuario_id
+
         if hasattr(self, "btn_toggle_alta"):
             if nuevo_rol in ("admin", "directivo"):
                 self.btn_toggle_alta.show()
@@ -504,6 +514,22 @@ class PanelCursos(QWidget):
                 self.btn_toggle_alta.hide()
                 if hasattr(self, "tarjeta_form"):
                     self.tarjeta_form.hide()
+
+        if hasattr(self, "btn_horarios"):
+            if nuevo_rol == "profesor":
+                self.btn_horarios.setText("⏰ Mis Horarios")
+                self.btn_horarios.show()
+            elif nuevo_rol == "admin":
+                self.btn_horarios.setText("⏰ Gestionar Horarios")
+                self.btn_horarios.show()
+            else:
+                self.btn_horarios.hide()
+
+        if hasattr(self, "btn_eliminar"):
+            if nuevo_rol == "admin":
+                self.btn_eliminar.show()
+            else:
+                self.btn_eliminar.hide()
 
     def _armar_vista_general(self):
         layout = QVBoxLayout(self.vista_general)
@@ -608,6 +634,12 @@ class PanelCursos(QWidget):
         header.addWidget(btn_volver)
         header.addStretch()
 
+        self.btn_horarios = QPushButton("⏰ Mis Horarios")
+        self.btn_horarios.setCursor(Qt.PointingHandCursor)
+        self.btn_horarios.setStyleSheet(_estilo_boton(COLOR_ACENTO, COLOR_ACENTO_HOVER))
+        self.btn_horarios.clicked.connect(self._abrir_dialogo_horarios)
+        header.addWidget(self.btn_horarios)
+
         self.btn_tomar_lista = QPushButton("📋 Tomar Lista")
         self.btn_tomar_lista.setCursor(Qt.PointingHandCursor)
         self.btn_tomar_lista.setStyleSheet(_estilo_boton("#1e3a29", "#284e37"))
@@ -620,6 +652,16 @@ class PanelCursos(QWidget):
         self.btn_eliminar.clicked.connect(self._eliminar_curso)
         header.addWidget(self.btn_eliminar)
         layout.addLayout(header)
+
+    def _abrir_dialogo_horarios(self):
+        if not getattr(self, "curso_actual", None):
+            return
+        from interfaz.dialogo_horarios import DialogoHorarios
+        usr = getattr(self, "usuario_actual", None) or {"id": self.usuario_id, "rol": getattr(self, "rol_actual", "admin")}
+        dialogo = DialogoHorarios(self.curso_actual, usuario_actual=usr, parent=self)
+        if hasattr(self, "on_horario_actualizado") and callable(self.on_horario_actualizado):
+            dialogo.horarios_actualizados.connect(self.on_horario_actualizado)
+        dialogo.exec()
 
         # Tarjeta encabezado del curso
         tarjeta_resumen = _tarjeta()
@@ -1544,6 +1586,12 @@ class VentanaAdmin(QMainWindow):
 
         self._armar_sidebar_y_stack()
         layout_raiz.addWidget(self.cuerpo)
+
+        rol_usuario = self.usuario.get("rol", "admin") if self.usuario else "admin"
+        if hasattr(self, "combo_rol_vista"):
+            idx = self.combo_rol_vista.findData(rol_usuario)
+            if idx >= 0:
+                self.combo_rol_vista.setCurrentIndex(idx)
         self._al_cambiar_rol_vista()
 
     def _armar_sidebar_y_stack(self):
@@ -1631,9 +1679,12 @@ class VentanaAdmin(QMainWindow):
         self.panel_alumnos = PanelAlumnos(self.ciclo_id)
         usuario_id = self.usuario.get("id", 1) if self.usuario else 1
         self.panel_cursos = PanelCursos(
-            self.ciclo_id, usuario_id=usuario_id, on_cambio=self.panel_alumnos.recargar_cursos
+            self.ciclo_id,
+            usuario_id=usuario_id,
+            on_cambio=self.panel_alumnos.recargar_cursos,
+            usuario_actual=self.usuario,
         )
-        self.panel_alumnos.on_cambio = self.panel_cursos.recargar
+        self.panel_cursos.on_horario_actualizado = self.panel_hub._cargar_datos
         self.panel_asistencia = PanelAsistencia(self.ciclo_id)
 
         self.stack.addWidget(self.panel_hub)        # 0 - Inicio
@@ -1669,6 +1720,21 @@ class VentanaAdmin(QMainWindow):
             rol_txt = rol_vista.capitalize() if rol_vista else "Admin"
             self.label_usuario.setText(f"Sesion local\nVista: {rol_txt}")
 
+    def _obtener_profesor_id_activo(self) -> int:
+        if self.usuario and self.usuario.get("rol") == "profesor":
+            return self.usuario.get("id", 1)
+        try:
+            from database.conexion import conexion
+            with conexion() as conn:
+                c = conn.cursor()
+                c.execute("SELECT id FROM usuario WHERE rol = 'profesor' AND activo = 1 ORDER BY id LIMIT 1")
+                row = c.fetchone()
+                if row:
+                    return row["id"]
+        except Exception:
+            pass
+        return 2
+
     def _al_cambiar_rol_vista(self, index: int = 0):
         if not hasattr(self, "combo_rol_vista"):
             return
@@ -1685,13 +1751,15 @@ class VentanaAdmin(QMainWindow):
         if hasattr(self, "label_titulo_barra"):
             self.label_titulo_barra.setText(titulos_rol.get(rol, "Panel de Control"))
 
+        profesor_id = self._obtener_profesor_id_activo() if rol == "profesor" else None
+
         if hasattr(self, "panel_hub"):
-            self.panel_hub.cambiar_rol(rol)
+            self.panel_hub.cambiar_rol(rol, profesor_id=profesor_id)
 
         self._actualizar_footer_usuario(rol_vista=rol)
-        self._aplicar_permisos_vista_rol(rol)
+        self._aplicar_permisos_vista_rol(rol, profesor_id=profesor_id)
 
-    def _aplicar_permisos_vista_rol(self, rol: str):
+    def _aplicar_permisos_vista_rol(self, rol: str, profesor_id: int | None = None):
         # 0: Inicio, 1: Cursos, 2: Alumnos, 3: Asistencia
         if hasattr(self, "botones_nav") and len(self.botones_nav) >= 4:
             btn_alumnos = self.botones_nav[2]
@@ -1703,7 +1771,7 @@ class VentanaAdmin(QMainWindow):
                 btn_alumnos.show()
 
         if hasattr(self, "panel_cursos") and hasattr(self.panel_cursos, "cambiar_rol"):
-            self.panel_cursos.cambiar_rol(rol)
+            self.panel_cursos.cambiar_rol(rol, usuario_id=profesor_id)
 
     def _cerrar_sesion(self):
         """Cierra el admin y abre una nueva ventana de login; nunca termina la app."""
