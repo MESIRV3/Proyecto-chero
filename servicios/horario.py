@@ -97,21 +97,39 @@ def listar_horarios_de_curso(curso_id: int, usuario_id: int | None = None) -> Re
 def agregar_horario(
     curso_id: int,
     dia_semana: int,
-    numero_bloque: int,
-    hora_inicio: str,
-    hora_fin: str,
-    materia_id: int,
-    usuario_id: int,
+    *args,
+    hora_inicio: str | None = None,
+    hora_fin: str | None = None,
+    materia_id: int | None = None,
+    usuario_id: int | None = None,
+    numero_bloque: int | None = None,
 ) -> Resultado:
-    """Registra un bloque de horario para una materia y profesor en un curso."""
+    """Registra una clase en un horario determinado (hora inicio y hora fin).
+    
+    Soporta la firma simple:
+        agregar_horario(curso_id, dia_semana, hora_inicio, hora_fin, materia_id, usuario_id)
+    la firma con kwargs:
+        agregar_horario(curso_id=..., dia_semana=..., hora_inicio=..., hora_fin=..., materia_id=..., usuario_id=...)
+    y la firma tradicional con bloque explicito:
+        agregar_horario(curso_id, dia_semana, numero_bloque, hora_inicio, hora_fin, materia_id, usuario_id)
+    """
     if dia_semana not in DIAS_SEMANA:
         return Resultado.error("El dia de la semana debe ser entre Lunes (1) y Viernes (5)")
 
-    if numero_bloque <= 0:
-        return Resultado.error("El numero de bloque debe ser mayor a 0")
+    bloque = numero_bloque
+    if len(args) == 5:
+        # (bloque, hora_inicio, hora_fin, materia_id, usuario_id)
+        bloque, hora_inicio, hora_fin, materia_id, usuario_id = args
+    elif len(args) == 4:
+        # (hora_inicio, hora_fin, materia_id, usuario_id)
+        hora_inicio, hora_fin, materia_id, usuario_id = args
+    elif len(args) == 1:
+        # (numero_bloque,) con el resto por kwargs
+        bloque = args[0]
 
     hora_inicio = (hora_inicio or "").strip()
     hora_fin = (hora_fin or "").strip()
+
     if not hora_inicio or not hora_fin:
         return Resultado.error("Las horas de inicio y fin son obligatorias")
 
@@ -139,52 +157,55 @@ def agregar_horario(
             if not usr:
                 return Resultado.error("El docente especificado no existe")
 
-            # 2. Verificar superposición en el mismo curso para el mismo día y bloque/horario
+            # 2. Verificar superposicion horaria en el mismo curso para el mismo dia
             cursor.execute("""
-                SELECT h.id, m.nombre AS materia_nombre, h.numero_bloque
+                SELECT h.id, m.nombre AS materia_nombre, h.hora_inicio, h.hora_fin
                 FROM horario h
                 LEFT JOIN materia m ON m.id = h.materia_id
                 WHERE h.curso_id = ?
                   AND h.dia_semana = ?
-                  AND (
-                      h.numero_bloque = ? OR
-                      (h.hora_inicio < ? AND h.hora_fin > ?)
-                  )
-            """, (curso_id, dia_semana, numero_bloque, hora_fin, hora_inicio))
+                  AND (h.hora_inicio < ? AND h.hora_fin > ?)
+            """, (curso_id, dia_semana, hora_fin, hora_inicio))
             conflicto_curso = cursor.fetchone()
             if conflicto_curso:
                 return Resultado.error(
-                    f"El curso ya tiene ocupado ese horario con '{conflicto_curso['materia_nombre']}' "
-                    f"(Bloque {conflicto_curso['numero_bloque']})"
+                    f"El curso ya tiene ocupado ese horario con la clase de '{conflicto_curso['materia_nombre']}' "
+                    f"({conflicto_curso['hora_inicio']} a {conflicto_curso['hora_fin']})"
                 )
 
-            # 3. Verificar superposición del mismo profesor en otro curso
+            # 3. Verificar superposicion horaria del mismo profesor en otro curso
             cursor.execute("""
-                SELECT h.id, c.anio, c.division, h.numero_bloque
+                SELECT h.id, c.anio, c.division, h.hora_inicio, h.hora_fin
                 FROM horario h
                 JOIN curso c ON c.id = h.curso_id
                 WHERE h.usuario_id = ?
                   AND h.dia_semana = ?
-                  AND (
-                      h.numero_bloque = ? OR
-                      (h.hora_inicio < ? AND h.hora_fin > ?)
-                  )
-            """, (usuario_id, dia_semana, numero_bloque, hora_fin, hora_inicio))
+                  AND (h.hora_inicio < ? AND h.hora_fin > ?)
+            """, (usuario_id, dia_semana, hora_fin, hora_inicio))
             conflicto_docente = cursor.fetchone()
             if conflicto_docente:
                 return Resultado.error(
                     f"El docente ya tiene asignada clase en {conflicto_docente['anio']}°{conflicto_docente['division']} "
-                    f"en ese mismo horario (Bloque {conflicto_docente['numero_bloque']})"
+                    f"en ese horario ({conflicto_docente['hora_inicio']} a {conflicto_docente['hora_fin']})"
                 )
 
-            # 4. Insertar horario
+            # 4. Calcular numero_bloque si no fue provisto
+            if bloque is None or bloque <= 0:
+                cursor.execute("""
+                    SELECT COUNT(*) AS total
+                    FROM horario
+                    WHERE curso_id = ? AND dia_semana = ? AND hora_inicio <= ?
+                """, (curso_id, dia_semana, hora_inicio))
+                bloque = (cursor.fetchone()["total"] or 0) + 1
+
+            # 5. Insertar horario
             cursor.execute("""
                 INSERT INTO horario (
                     curso_id, dia_semana, numero_bloque,
                     hora_inicio, hora_fin, es_recreo,
                     materia_id, usuario_id
                 ) VALUES (?, ?, ?, ?, ?, 0, ?, ?)
-            """, (curso_id, dia_semana, numero_bloque, hora_inicio, hora_fin, materia_id, usuario_id))
+            """, (curso_id, dia_semana, bloque, hora_inicio, hora_fin, materia_id, usuario_id))
             nuevo_id = cursor.lastrowid
 
         return Resultado.exito("Horario registrado exitosamente", datos={"id": nuevo_id})

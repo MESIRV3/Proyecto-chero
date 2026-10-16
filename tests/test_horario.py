@@ -15,7 +15,7 @@ class TestHorarioServicio(unittest.TestCase):
         cls.app = QApplication.instance() or QApplication(sys.argv)
 
     def setUp(self):
-        # Asegurar datos minimos para pruebas de conflicto
+        # Asegurar datos minimos para pruebas de conflicto y limpiar residuos previos
         with conexion() as conn:
             c = conn.cursor()
             # Obtenemos un curso y usuario profesor existentes
@@ -34,6 +34,12 @@ class TestHorarioServicio(unittest.TestCase):
             else:
                 res = horario.crear_materia_si_no_existe(self.curso_id, "Materia Test")
                 self.materia_id = res.datos["id"]
+
+            # Limpiar horarios que pudieron quedar de pruebas interrumpidas
+            conn.execute(
+                "DELETE FROM horario WHERE curso_id = ? AND dia_semana IN (2, 3, 5)",
+                (self.curso_id,)
+            )
 
     def test_crear_y_listar_materias(self):
         res_crear = horario.crear_materia_si_no_existe(self.curso_id, "Filosofia Test")
@@ -64,16 +70,16 @@ class TestHorarioServicio(unittest.TestCase):
         )
         self.assertFalse(res_hora.ok)
 
-        # 3. Horario exitoso el Miercoles (dia 3, bloque 8)
+        # 3. Horario exitoso el Miercoles con firma simplificada (sin bloque explicito)
         res_ok = horario.agregar_horario(
-            self.curso_id, 3, 8, "12:40", "13:20", self.materia_id, self.profesor_id
+            self.curso_id, 3, "12:40", "13:20", self.materia_id, self.profesor_id
         )
         self.assertTrue(res_ok.ok, res_ok.mensaje)
         horario_id = res_ok.datos["id"]
 
-        # 4. Superposicion en el mismo curso y bloque
+        # 4. Superposicion en el mismo curso y horario
         res_conflicto = horario.agregar_horario(
-            self.curso_id, 3, 8, "12:40", "13:20", self.materia_id, self.profesor_id
+            self.curso_id, 3, "12:40", "13:20", self.materia_id, self.profesor_id
         )
         self.assertFalse(res_conflicto.ok)
         self.assertIn("ya tiene ocupado", res_conflicto.mensaje)
@@ -81,6 +87,22 @@ class TestHorarioServicio(unittest.TestCase):
         # 5. Eliminar horario
         res_del = horario.eliminar_horario(horario_id)
         self.assertTrue(res_del.ok)
+
+    def test_dialogo_horarios_marco_y_presets(self):
+        from interfaz.dialogo_horarios import DialogoHorarios
+        curso_mock = {"id": self.curso_id, "anio": 1, "division": "A", "turno": "Mañana"}
+        dialogo = DialogoHorarios(curso_mock, {"id": self.profesor_id, "rol": "profesor"})
+
+        # Comprobar que no existe combo_bloque y que los inputs de hora existen
+        self.assertFalse(hasattr(dialogo, "combo_bloque"))
+        self.assertTrue(hasattr(dialogo, "input_hora_inicio"))
+        self.assertTrue(hasattr(dialogo, "input_hora_fin"))
+
+        # Probar preset
+        dialogo._set_horario("09:00", "10:20")
+        self.assertEqual(dialogo.input_hora_inicio.text(), "09:00")
+        self.assertEqual(dialogo.input_hora_fin.text(), "10:20")
+        dialogo.close()
 
     def test_obtener_cursos_del_dia_por_profesor(self):
         # Agregar un horario temporal para el viernes (dia 5)

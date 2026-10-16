@@ -113,15 +113,14 @@ class DialogoHorarios(QDialog):
         lbl_seccion_tabla.setStyleSheet(f"color: {COLOR_TEXTO_TENUE};")
         layout.addWidget(lbl_seccion_tabla)
 
-        self.tabla_horarios = QTableWidget(0, 6)
+        self.tabla_horarios = QTableWidget(0, 5)
         self.tabla_horarios.setHorizontalHeaderLabels(
-            ["Día", "Hora", "Horario", "Materia", "Profesor", "Acción"]
+            ["Día", "Horario", "Materia", "Profesor", "Acción"]
         )
         self.tabla_horarios.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.tabla_horarios.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
         self.tabla_horarios.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
-        self.tabla_horarios.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
-        self.tabla_horarios.horizontalHeader().setSectionResizeMode(5, QHeaderView.ResizeToContents)
+        self.tabla_horarios.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeToContents)
         self.tabla_horarios.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.tabla_horarios.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.tabla_horarios.setAlternatingRowColors(True)
@@ -132,76 +131,161 @@ class DialogoHorarios(QDialog):
         self.tarjeta_form = _tarjeta()
         form_layout = QVBoxLayout(self.tarjeta_form)
         form_layout.setContentsMargins(18, 14, 18, 14)
-        form_layout.setSpacing(10)
+        form_layout.setSpacing(12)
 
-        lbl_tit_form = QLabel("➕ Agregar nuevo horario de clase")
+        lbl_tit_form = QLabel("➕ Asignar horario de clase")
         lbl_tit_form.setFont(QFont(FUENTE_MONO, 11, QFont.Bold))
         lbl_tit_form.setStyleSheet(f"color: {COLOR_TEXTO};")
         form_layout.addWidget(lbl_tit_form)
 
-        grid = QGridLayout()
-        grid.setSpacing(10)
+        # Fila superior: Día, Materia y Docente
+        fila_datos = QHBoxLayout()
+        fila_datos.setSpacing(12)
 
         # 1. Día de la semana
-        grid.addWidget(_etiqueta("Día:", tenue=True), 0, 0)
+        col_dia = QVBoxLayout()
+        col_dia.setSpacing(4)
+        col_dia.addWidget(_etiqueta("Día de la semana:", tenue=True))
         self.combo_dia = QComboBox()
         self.combo_dia.setStyleSheet(_estilo_input())
         for dia_num, dia_nom in servicio_horario.DIAS_SEMANA.items():
             self.combo_dia.addItem(dia_nom, dia_num)
-        grid.addWidget(self.combo_dia, 0, 1)
+        col_dia.addWidget(self.combo_dia)
+        fila_datos.addLayout(col_dia, stretch=1)
 
-        # 2. Hora de clase
-        grid.addWidget(_etiqueta("Hora:", tenue=True), 0, 2)
-        self.combo_bloque = QComboBox()
-        self.combo_bloque.setStyleSheet(_estilo_input())
-        for b in range(1, 9):
-            sug_ini, _ = servicio_horario.BLOQUES_DEFAULT.get(b, ("", ""))
-            self.combo_bloque.addItem(f"{b}° Hora ({sug_ini})", b)
-        self.combo_bloque.currentIndexChanged.connect(self._al_cambiar_bloque)
-        grid.addWidget(self.combo_bloque, 0, 3)
-
-        # 3. Horas inicio y fin
-        grid.addWidget(_etiqueta("Desde:", tenue=True), 0, 4)
-        self.input_hora_inicio = QLineEdit("07:30")
-        self.input_hora_inicio.setFixedWidth(70)
-        self.input_hora_inicio.setStyleSheet(_estilo_input())
-        grid.addWidget(self.input_hora_inicio, 0, 5)
-
-        grid.addWidget(_etiqueta("Hasta:", tenue=True), 0, 6)
-        self.input_hora_fin = QLineEdit("08:10")
-        self.input_hora_fin.setFixedWidth(70)
-        self.input_hora_fin.setStyleSheet(_estilo_input())
-        grid.addWidget(self.input_hora_fin, 0, 7)
-
-        # Fila 2: Materia y Docente
-        grid.addWidget(_etiqueta("Materia:", tenue=True), 1, 0)
+        # 2. Materia
+        col_mat = QVBoxLayout()
+        col_mat.setSpacing(4)
+        col_mat.addWidget(_etiqueta("Materia:", tenue=True))
         self.combo_materia = QComboBox()
         self.combo_materia.setStyleSheet(_estilo_input())
         self.combo_materia.currentIndexChanged.connect(self._al_cambiar_combo_materia)
-        grid.addWidget(self.combo_materia, 1, 1, 1, 3)
+        col_mat.addWidget(self.combo_materia)
 
         self.input_nueva_materia = QLineEdit()
         self.input_nueva_materia.setPlaceholderText("Nombre de la nueva materia...")
         self.input_nueva_materia.setStyleSheet(_estilo_input())
         self.input_nueva_materia.hide()
-        grid.addWidget(self.input_nueva_materia, 1, 4, 1, 4)
+        col_mat.addWidget(self.input_nueva_materia)
+        fila_datos.addLayout(col_mat, stretch=2)
 
-        # Docente
-        grid.addWidget(_etiqueta("Docente:", tenue=True), 2, 0)
+        # 3. Docente
+        col_doc = QVBoxLayout()
+        col_doc.setSpacing(4)
+        col_doc.addWidget(_etiqueta("Docente a cargo:", tenue=True))
         self.combo_docente = QComboBox()
         self.combo_docente.setStyleSheet(_estilo_input())
         self._cargar_combo_docentes()
-        grid.addWidget(self.combo_docente, 2, 1, 1, 3)
+        col_doc.addWidget(self.combo_docente)
+        fila_datos.addLayout(col_doc, stretch=2)
 
-        # Botón agregar
+        form_layout.addLayout(fila_datos)
+
+        # Marco visual dedicado para ingresar el inicio y fin de la hora
+        marco_horario = QFrame()
+        marco_horario.setStyleSheet(f"""
+            QFrame {{
+                background-color: {COLOR_INPUT};
+                border: 1px solid {COLOR_BORDE};
+                border-radius: 12px;
+            }}
+        """)
+        layout_marco = QVBoxLayout(marco_horario)
+        layout_marco.setContentsMargins(14, 10, 14, 10)
+        layout_marco.setSpacing(8)
+
+        # Fila de inputs de hora inicio y fin
+        fila_inputs_hora = QHBoxLayout()
+        fila_inputs_hora.setSpacing(10)
+
+        lbl_icono_hora = QLabel("🕒")
+        lbl_icono_hora.setFont(QFont(FUENTE_MONO, 13))
+        lbl_icono_hora.setStyleSheet("background: transparent; border: none;")
+        fila_inputs_hora.addWidget(lbl_icono_hora)
+
+        lbl_inicio = _etiqueta("Hora Inicio:")
+        fila_inputs_hora.addWidget(lbl_inicio)
+
+        self.input_hora_inicio = QLineEdit("07:30")
+        self.input_hora_inicio.setPlaceholderText("07:30")
+        self.input_hora_inicio.setAlignment(Qt.AlignCenter)
+        self.input_hora_inicio.setFont(QFont(FUENTE_MONO, 11, QFont.Bold))
+        self.input_hora_inicio.setFixedWidth(85)
+        self.input_hora_inicio.setStyleSheet(_estilo_input())
+        fila_inputs_hora.addWidget(self.input_hora_inicio)
+
+        lbl_flecha = QLabel("➔")
+        lbl_flecha.setFont(QFont(FUENTE_MONO, 11))
+        lbl_flecha.setStyleSheet(f"color: {COLOR_TEXTO_TENUE}; background: transparent; border: none;")
+        fila_inputs_hora.addWidget(lbl_flecha)
+
+        lbl_fin = _etiqueta("Hora Fin:")
+        fila_inputs_hora.addWidget(lbl_fin)
+
+        self.input_hora_fin = QLineEdit("08:50")
+        self.input_hora_fin.setPlaceholderText("08:50")
+        self.input_hora_fin.setAlignment(Qt.AlignCenter)
+        self.input_hora_fin.setFont(QFont(FUENTE_MONO, 11, QFont.Bold))
+        self.input_hora_fin.setFixedWidth(85)
+        self.input_hora_fin.setStyleSheet(_estilo_input())
+        fila_inputs_hora.addWidget(self.input_hora_fin)
+
+        fila_inputs_hora.addSpacing(16)
+
         self.btn_guardar_horario = QPushButton("✔ Guardar Horario")
         self.btn_guardar_horario.setCursor(Qt.PointingHandCursor)
         self.btn_guardar_horario.setStyleSheet(_estilo_boton(COLOR_ACENTO, COLOR_ACENTO_HOVER))
         self.btn_guardar_horario.clicked.connect(self._guardar_horario)
-        grid.addWidget(self.btn_guardar_horario, 2, 4, 1, 4)
+        fila_inputs_hora.addWidget(self.btn_guardar_horario)
 
-        form_layout.addLayout(grid)
+        fila_inputs_hora.addStretch()
+        layout_marco.addLayout(fila_inputs_hora)
+
+        # Fila de sugerencias / atajos rápidos
+        fila_atajos = QHBoxLayout()
+        fila_atajos.setSpacing(6)
+        lbl_atajos = QLabel("Atajos habituales:")
+        lbl_atajos.setFont(QFont(FUENTE_MONO, 9))
+        lbl_atajos.setStyleSheet(f"color: {COLOR_TEXTO_TENUE}; background: transparent; border: none;")
+        fila_atajos.addWidget(lbl_atajos)
+
+        turnos_sugeridos = [
+            ("07:30 - 08:50", "07:30", "08:50"),
+            ("09:00 - 10:20", "09:00", "10:20"),
+            ("10:30 - 11:50", "10:30", "11:50"),
+            ("12:00 - 13:20", "12:00", "13:20"),
+            ("13:30 - 14:50", "13:30", "14:50"),
+            ("15:00 - 16:20", "15:00", "16:20"),
+        ]
+        for etiqueta_btn, h_ini, h_fin in turnos_sugeridos:
+            btn_preset = QPushButton(etiqueta_btn)
+            btn_preset.setCursor(Qt.PointingHandCursor)
+            btn_preset.setFont(QFont(FUENTE_MONO, 8))
+            btn_preset.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {COLOR_TARJETA};
+                    color: {COLOR_TEXTO_TENUE};
+                    border: 1px solid {COLOR_BORDE};
+                    border-radius: 6px;
+                    padding: 3px 8px;
+                }}
+                QPushButton:hover {{
+                    background-color: {COLOR_ACENTO_HOVER};
+                    color: #ffffff;
+                }}
+            """)
+            btn_preset.clicked.connect(lambda _, ini=h_ini, fin=h_fin: self._set_horario(ini, fin))
+            fila_atajos.addWidget(btn_preset)
+
+        fila_atajos.addStretch()
+        layout_marco.addLayout(fila_atajos)
+
+        form_layout.addWidget(marco_horario)
         layout.addWidget(self.tarjeta_form)
+
+    def _set_horario(self, inicio: str, fin: str):
+        self.input_hora_inicio.setText(inicio)
+        self.input_hora_fin.setText(fin)
 
     def _cargar_combo_docentes(self):
         """Llena el combo de docentes y preselecciona al usuario actual si es profesor."""
@@ -225,13 +309,6 @@ class DialogoHorarios(QDialog):
             if idx >= 0:
                 self.combo_docente.setCurrentIndex(idx)
                 self.combo_docente.setEnabled(False)
-
-    def _al_cambiar_bloque(self, index: int):
-        bloque = self.combo_bloque.currentData()
-        if bloque in servicio_horario.BLOQUES_DEFAULT:
-            inicio, fin = servicio_horario.BLOQUES_DEFAULT[bloque]
-            self.input_hora_inicio.setText(inicio)
-            self.input_hora_fin.setText(fin)
 
     def _al_cambiar_combo_materia(self, index: int):
         data = self.combo_materia.currentData()
@@ -259,16 +336,14 @@ class DialogoHorarios(QDialog):
         self.tabla_horarios.setRowCount(len(horarios))
         for fila, h in enumerate(horarios):
             dia_txt = servicio_horario.DIAS_SEMANA.get(h["dia_semana"], f"Día {h['dia_semana']}")
-            bloque_txt = f"{h['numero_bloque']}° Hora"
             rango_txt = f"{h['hora_inicio']} - {h['hora_fin']}"
             mat_txt = h.get("materia_nombre") or "—"
             prof_txt = h.get("profesor_nombre") or "—"
 
             self.tabla_horarios.setItem(fila, 0, QTableWidgetItem(dia_txt))
-            self.tabla_horarios.setItem(fila, 1, QTableWidgetItem(bloque_txt))
-            self.tabla_horarios.setItem(fila, 2, QTableWidgetItem(rango_txt))
-            self.tabla_horarios.setItem(fila, 3, QTableWidgetItem(mat_txt))
-            self.tabla_horarios.setItem(fila, 4, QTableWidgetItem(prof_txt))
+            self.tabla_horarios.setItem(fila, 1, QTableWidgetItem(rango_txt))
+            self.tabla_horarios.setItem(fila, 2, QTableWidgetItem(mat_txt))
+            self.tabla_horarios.setItem(fila, 3, QTableWidgetItem(prof_txt))
 
             # Botón de eliminar horario
             btn_eliminar = QPushButton("✕ Quitar")
@@ -277,15 +352,22 @@ class DialogoHorarios(QDialog):
             btn_eliminar.setFixedHeight(26)
             horario_id = h["id"]
             btn_eliminar.clicked.connect(lambda _, hid=horario_id: self._eliminar_horario(hid))
-            self.tabla_horarios.setCellWidget(fila, 5, btn_eliminar)
+            self.tabla_horarios.setCellWidget(fila, 4, btn_eliminar)
 
     def _guardar_horario(self):
         dia_semana = self.combo_dia.currentData()
-        bloque = self.combo_bloque.currentData()
         hora_inicio = self.input_hora_inicio.text().strip()
         hora_fin = self.input_hora_fin.text().strip()
         materia_data = self.combo_materia.currentData()
         usuario_id = self.combo_docente.currentData()
+
+        if not hora_inicio or not hora_fin:
+            self._mostrar_feedback("Debes ingresar la hora de inicio y fin", error=True)
+            return
+
+        if hora_inicio >= hora_fin:
+            self._mostrar_feedback("La hora de inicio debe ser anterior a la de fin", error=True)
+            return
 
         if not usuario_id:
             self._mostrar_feedback("Debes seleccionar un docente para el horario", error=True)
@@ -310,7 +392,6 @@ class DialogoHorarios(QDialog):
         res = servicio_horario.agregar_horario(
             curso_id=self.curso_id,
             dia_semana=dia_semana,
-            numero_bloque=bloque,
             hora_inicio=hora_inicio,
             hora_fin=hora_fin,
             materia_id=materia_id,
@@ -321,7 +402,7 @@ class DialogoHorarios(QDialog):
             self._mostrar_feedback(res.mensaje, error=True)
             return
 
-        self._mostrar_feedback("✔ Horario agregado con éxito", error=False)
+        self._mostrar_feedback("✔ Horario registrado con éxito", error=False)
         self.input_nueva_materia.clear()
         self.input_nueva_materia.hide()
         self.recargar_horarios()
@@ -331,7 +412,7 @@ class DialogoHorarios(QDialog):
         confirm = QMessageBox.question(
             self,
             "Eliminar Horario",
-            "¿Estás seguro de eliminar este bloque horario?",
+            "¿Estás seguro de eliminar este horario de clase?",
             QMessageBox.Yes | QMessageBox.No,
             QMessageBox.No,
         )
