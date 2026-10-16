@@ -31,7 +31,7 @@ ICONO_MAXIMIZAR = os.path.join(ASSETS_PATH, "maximize.png")
 ICONO_CERRAR = os.path.join(ASSETS_PATH, "close.png")
 # =============================================
 
-FUENTE_MONO = "Courier New"
+FUENTE_MONO = "Segoe UI"
 
 
 class VentanaLogin(QMainWindow):

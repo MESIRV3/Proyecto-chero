@@ -7,7 +7,7 @@ from PySide6.QtWidgets import QFrame, QLabel
 from PySide6.QtGui import QFont
 
 
-FUENTE_MONO = "Courier New"
+FUENTE_MONO = "Segoe UI"
 
 COLOR_FONDO = "#0b0b0d"
 COLOR_TARJETA = "rgba(255, 255, 255, 0.04)"
