@@ -56,3 +56,33 @@ def autenticar(username: str, password: str) -> Resultado:
             datos=datos_usuario
         )
 
+
+def listar_usuarios(rol: str | None = None, solo_activos: bool = True) -> Resultado:
+    """Lista usuarios registrados (sin exponer contrasenas), opcionalmente filtrados por rol."""
+    try:
+        with conexion() as conn:
+            cursor = conn.cursor()
+            condiciones = []
+            params = []
+
+            if rol:
+                condiciones.append("rol = ?")
+                params.append(rol)
+            if solo_activos:
+                condiciones.append("activo = 1")
+
+            where_sql = f"WHERE {' AND '.join(condiciones)}" if condiciones else ""
+            cursor.execute(
+                f"""
+                SELECT id, nombre, apellido, username, rol, activo
+                FROM usuario
+                {where_sql}
+                ORDER BY apellido ASC, nombre ASC
+                """,
+                tuple(params),
+            )
+            filas = [dict(f) for f in cursor.fetchall()]
+        return Resultado.exito("Usuarios obtenidos", datos=filas)
+    except Exception as e:
+        return Resultado.error(f"Error al listar usuarios: {e}")
+

@@ -140,3 +140,14 @@ CREATE TABLE dia_habil (
     es_habil  BOOLEAN NOT NULL,
     motivo    TEXT
 );
+
+
+-- PRECEPTOR_CURSO (asignacion de cursos a preceptores)
+CREATE TABLE preceptor_curso (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    usuario_id  INTEGER NOT NULL,
+    curso_id    INTEGER NOT NULL,
+    UNIQUE(usuario_id, curso_id),
+    FOREIGN KEY (usuario_id) REFERENCES usuario(id),
+    FOREIGN KEY (curso_id)   REFERENCES curso(id)
+);

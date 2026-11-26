@@ -26,6 +26,17 @@ class TestRolesAdmin(unittest.TestCase):
         self.assertIn("Panel Directivo", v.label_titulo_barra.text())
         self.assertIn("Directivo", v.label_usuario.text())
         self.assertTrue(v.panel_hub.btn_accion_1.isHidden())
+        # En PanelAlumnos, el directivo no tiene acciones destructivas
+        self.assertTrue(v.panel_alumnos.btn_baja.isHidden())
+        self.assertTrue(v.panel_alumnos.btn_reactivar.isHidden())
+        self.assertTrue(v.panel_alumnos.btn_toggle_alta.isHidden())
+        self.assertTrue(v.panel_alumnos.btn_mover.isHidden())
+        # En PanelCursos, el directivo gestiona horarios pero no agrega cursos ni toma lista
+        self.assertEqual(v.panel_cursos.btn_horarios.text(), "⏰ Gestionar Horarios")
+        self.assertTrue(v.panel_cursos.btn_tomar_lista.isHidden())
+        # En rol directivo, la seccion Personal esta visible
+        self.assertFalse(v.botones_nav[4].isHidden())
+        self.assertFalse(v.panel_hub.btn_accion_4.isHidden())
 
         # 2. Cambiar a Preceptor
         idx_prec = v.combo_rol_vista.findData("preceptor")
@@ -33,14 +44,48 @@ class TestRolesAdmin(unittest.TestCase):
         self.assertEqual(v.panel_hub.rol_actual, "preceptor")
         self.assertIn("Preceptoría", v.label_titulo_barra.text())
         self.assertFalse(v.panel_hub.btn_accion_1.isHidden())
+        self.assertTrue(v.botones_nav[4].isHidden())
+        self.assertTrue(v.panel_hub.btn_accion_4.isHidden())
+        # En PanelAlumnos, el preceptor puede agregar/mover pero no dar de baja/reactivar
+        self.assertFalse(v.panel_alumnos.btn_toggle_alta.isHidden())
+        self.assertFalse(v.panel_alumnos.btn_mover.isHidden())
+        self.assertTrue(v.panel_alumnos.btn_baja.isHidden())
+        self.assertTrue(v.panel_alumnos.btn_reactivar.isHidden())
+        # En PanelCursos, el preceptor ve horarios y toma lista diaria
+        self.assertEqual(v.panel_cursos.btn_horarios.text(), "⏰ Ver Horarios")
+        self.assertEqual(v.panel_cursos.btn_tomar_lista.text(), "📋 Tomar Lista")
 
         # 3. Cambiar a Profesor
         idx_prof = v.combo_rol_vista.findData("profesor")
         v.combo_rol_vista.setCurrentIndex(idx_prof)
         self.assertEqual(v.panel_hub.rol_actual, "profesor")
         self.assertIn("Panel Docente", v.label_titulo_barra.text())
-        # En rol profesor, la pestaña de alumnos se oculta
+        # En rol profesor, la pestaña de alumnos y personal se ocultan
         self.assertTrue(v.botones_nav[2].isHidden())
+        self.assertTrue(v.botones_nav[4].isHidden())
+        self.assertTrue(v.panel_hub.btn_accion_4.isHidden())
+        # En PanelCursos, toma asistencia de clase
+        self.assertEqual(v.panel_cursos.btn_tomar_lista.text(), "📝 Asistencia de Clase")
+        # En el HUB del profesor, la grilla de KPIs debe ser perfectamente simetrica (3 + 3 = 6)
+        self.assertEqual(v.panel_hub.fila_kpi_1.count(), 3)
+        self.assertEqual(v.panel_hub.fila_kpi_2.count(), 3)
+
+        # 4. Volver a Admin
+        idx_adm = v.combo_rol_vista.findData("admin")
+        v.combo_rol_vista.setCurrentIndex(idx_adm)
+        self.assertFalse(v.panel_alumnos.btn_baja.isHidden())
+        self.assertFalse(v.panel_alumnos.btn_reactivar.isHidden())
+        self.assertFalse(v.panel_alumnos.btn_toggle_alta.isHidden())
+        self.assertFalse(v.botones_nav[4].isHidden())
+        self.assertFalse(v.panel_hub.btn_accion_4.isHidden())
+        self.assertEqual(v.panel_hub.fila_kpi_1.count(), 3)
+        self.assertEqual(v.panel_hub.fila_kpi_2.count(), 3)
+
+        # Controles de ventana integrados
+        self.assertEqual(v.btn_minimizar.toolTip(), "Minimizar")
+        self.assertEqual(v.btn_maximizar.toolTip(), "Maximizar")
+        self.assertEqual(v.btn_cerrar.toolTip(), "Cerrar")
+        self.assertEqual(v.btn_minimizar.width(), 30)
 
         v.close()
 

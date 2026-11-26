@@ -135,9 +135,9 @@ class TestHorarioServicio(unittest.TestCase):
     def test_interfaz_profesor_boton_horarios_y_hub(self):
         v = VentanaAdmin({"id": self.profesor_id, "nombre": "Docente Test", "rol": "profesor"})
 
-        # En rol profesor, la tabla del Hub debe tener 5 columnas (con Materia y Horario)
+        # En rol profesor, la tabla del Hub debe tener 6 columnas (con Materia, Horario y Acción para tomar asistencia)
         self.assertEqual(v.panel_hub.rol_actual, "profesor")
-        self.assertEqual(v.panel_hub.tabla_cursos.columnCount(), 5)
+        self.assertEqual(v.panel_hub.tabla_cursos.columnCount(), 6)
         self.assertIn("Cursos a cargo hoy", v.panel_hub.lbl_titulo_tabla.text())
 
         # En PanelCursos, el botón de Mis Horarios debe estar visible y Eliminar curso oculto
@@ -151,6 +151,29 @@ class TestHorarioServicio(unittest.TestCase):
         self.assertFalse(v.panel_cursos.btn_eliminar.isHidden())
 
         v.close()
+
+    def test_dialogo_horarios_rbac(self):
+        from interfaz.dialogo_horarios import DialogoHorarios
+        curso_mock = {"id": self.curso_id, "anio": 1, "division": "1", "turno": "Mañana"}
+
+        # 1. Directivo: Puede asignar y gestionar horarios (formulario visible)
+        usr_dir = {"id": 99, "nombre": "Directora Marta", "rol": "directivo"}
+        dlg_dir = DialogoHorarios(curso_mock, usuario_actual=usr_dir)
+        self.assertFalse(dlg_dir.tarjeta_form.isHidden())
+        dlg_dir.close()
+
+        # 2. Preceptor: Solo lectura (formulario oculto)
+        usr_prec = {"id": 98, "nombre": "Preceptor Juan", "rol": "preceptor"}
+        dlg_prec = DialogoHorarios(curso_mock, usuario_actual=usr_prec)
+        self.assertTrue(dlg_prec.tarjeta_form.isHidden())
+        dlg_prec.close()
+
+        # 3. Admin: Control total (formulario visible)
+        usr_adm = {"id": 1, "nombre": "Admin", "rol": "admin"}
+        dlg_adm = DialogoHorarios(curso_mock, usuario_actual=usr_adm)
+        self.assertFalse(dlg_adm.tarjeta_form.isHidden())
+        dlg_adm.close()
+
 
 
 if __name__ == "__main__":

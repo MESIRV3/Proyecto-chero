@@ -266,7 +266,7 @@ def obtener_cursos_del_dia_por_profesor(
                 cursor.execute("""
                     SELECT 
                         h.id, h.numero_bloque, h.hora_inicio, h.hora_fin,
-                        m.nombre AS materia_nombre
+                        h.materia_id, m.nombre AS materia_nombre
                     FROM horario h
                     LEFT JOIN materia m ON m.id = h.materia_id
                     WHERE h.curso_id = ?
@@ -279,10 +279,14 @@ def obtener_cursos_del_dia_por_profesor(
 
                 # Materias unicas
                 materias_unicas = []
+                materias_ids = []
                 for h in horarios:
                     m = h.get("materia_nombre")
+                    mid = h.get("materia_id")
                     if m and m not in materias_unicas:
                         materias_unicas.append(m)
+                        if mid:
+                            materias_ids.append({"id": mid, "nombre": m})
 
                 # Resumen de horas y franja horaria
                 if horarios:
@@ -295,6 +299,8 @@ def obtener_cursos_del_dia_por_profesor(
                     horarios_resumen = "—"
 
                 curso["materias"] = materias_unicas
+                curso["materias_detalle"] = materias_ids
+                curso["primer_materia_id"] = materias_ids[0]["id"] if materias_ids else None
                 curso["materias_texto"] = ", ".join(materias_unicas) if materias_unicas else "—"
                 curso["horarios_texto"] = horarios_resumen
                 curso["bloques"] = horarios
@@ -309,3 +315,101 @@ def obtener_cursos_del_dia_por_profesor(
         )
     except Exception as e:
         return Resultado.error(f"Error al obtener cursos del dia: {e}")
+
+
+def listar_materias_de_profesor_en_curso(curso_id: int, usuario_id: int | None = None) -> Resultado:
+    """Devuelve las materias que dicta un profesor especifico en un curso dado.
+    Si usuario_id es None o no tiene materias con horario, devuelve todas las materias del curso.
+    """
+    try:
+        with conexion() as conn:
+            cursor = conn.cursor()
+            if usuario_id is not None:
+                cursor.execute("""
+                    SELECT DISTINCT m.id, m.nombre, m.curso_id
+                    FROM materia m
+                    JOIN horario h ON h.materia_id = m.id
+                    WHERE m.curso_id = ? AND h.usuario_id = ?
+                    ORDER BY m.nombre ASC
+                """, (curso_id, usuario_id))
+                filas = [dict(f) for f in cursor.fetchall()]
+                if filas:
+                    return Resultado.exito("Materias del profesor obtenidas", datos=filas)
+
+            # Si no hay materias asignadas en horarios o es admin, listar todas las materias del curso
+            cursor.execute(
+                "SELECT id, nombre, curso_id FROM materia WHERE curso_id = ? ORDER BY nombre ASC",
+                (curso_id,)
+            )
+            todas = [dict(f) for f in cursor.fetchall()]
+            return Resultado.exito("Materias del curso obtenidas", datos=todas)
+    except Exception as e:
+        return Resultado.error(f"Error al obtener materias del profesor: {e}")
+
+
+def listar_horarios_de_profesor(usuario_id: int, ciclo_id: int | None = None) -> Resultado:
+    """Devuelve todos los horarios asignados a un profesor en todos sus cursos."""
+    try:
+        with conexion() as conn:
+            cursor = conn.cursor()
+            condicion_ciclo = "AND c.ciclo_id = ?" if ciclo_id is not None else ""
+            params = (usuario_id, ciclo_id) if ciclo_id is not None else (usuario_id,)
+            cursor.execute(
+                f"""
+                SELECT
+                    h.id, h.curso_id, h.dia_semana, h.numero_bloque,
+                    h.hora_inicio, h.hora_fin, h.materia_id, h.usuario_id,
+                    m.nombre AS materia_nombre,
+                    c.anio, c.division, c.especialidad, c.turno
+                FROM horario h
+                JOIN curso c ON c.id = h.curso_id
+                LEFT JOIN materia m ON m.id = h.materia_id
+                WHERE h.usuario_id = ?
+                  AND h.es_recreo = 0
+                  {condicion_ciclo}
+                ORDER BY h.dia_semana ASC, h.hora_inicio ASC
+                """,
+                params,
+            )
+            filas = [dict(f) for f in cursor.fetchall()]
+        return Resultado.exito("Horarios del profesor obtenidos", datos=filas)
+    except Exception as e:
+        return Resultado.error(f"Error al listar horarios del profesor: {e}")
+
+
+def listar_profesores_con_conteo(ciclo_id: int | None = None) -> Resultado:
+    """Lista todos los profesores activos junto con la cantidad de horarios semanales asignados."""
+    try:
+        with conexion() as conn:
+            cursor = conn.cursor()
+            if ciclo_id is not None:
+                cursor.execute(
+                    """
+                    SELECT u.id, u.nombre, u.apellido, u.username,
+                           COUNT(c.id) AS cantidad_horarios
+                    FROM usuario u
+                    LEFT JOIN horario h ON h.usuario_id = u.id AND h.es_recreo = 0
+                    LEFT JOIN curso c ON c.id = h.curso_id AND c.ciclo_id = ?
+                    WHERE u.rol = 'profesor' AND u.activo = 1
+                    GROUP BY u.id, u.nombre, u.apellido, u.username
+                    ORDER BY u.apellido ASC, u.nombre ASC
+                    """,
+                    (ciclo_id,),
+                )
+            else:
+                cursor.execute(
+                    """
+                    SELECT u.id, u.nombre, u.apellido, u.username,
+                           COUNT(h.id) AS cantidad_horarios
+                    FROM usuario u
+                    LEFT JOIN horario h ON h.usuario_id = u.id AND h.es_recreo = 0
+                    WHERE u.rol = 'profesor' AND u.activo = 1
+                    GROUP BY u.id, u.nombre, u.apellido, u.username
+                    ORDER BY u.apellido ASC, u.nombre ASC
+                    """
+                )
+            filas = [dict(f) for f in cursor.fetchall()]
+        return Resultado.exito("Profesores obtenidos", datos=filas)
+    except Exception as e:
+        return Resultado.error(f"Error al listar profesores: {e}")
+

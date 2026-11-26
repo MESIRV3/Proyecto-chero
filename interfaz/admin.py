@@ -23,15 +23,17 @@ from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QLineEdit, QPushButton, QFrame, QStackedWidget, QTableWidget,
     QTableWidgetItem, QComboBox, QMessageBox, QHeaderView, QCheckBox,
-    QAbstractItemView, QButtonGroup, QTabWidget, QGridLayout, QScrollArea, QDateEdit
+    QAbstractItemView, QButtonGroup, QTabWidget, QGridLayout, QScrollArea,
+    QDateEdit, QSizePolicy
 )
-from PySide6.QtCore import Qt, QPoint, QSize, QRegularExpression, QDate, QTime
+from PySide6.QtCore import Qt, QPoint, QSize, QRegularExpression, QDate, QTime, QEvent
 from PySide6.QtGui import QFont, QIcon, QRegularExpressionValidator
 
 from servicios import curso as servicio_curso
 from servicios import alumno as servicio_alumno
 from servicios import ciclo_lectivo as servicio_ciclo
 from servicios import lista_diaria as servicio_lista_diaria
+from servicios import preceptor as servicio_preceptor
 
 from interfaz.estilos import (
     FUENTE_MONO,
@@ -47,6 +49,8 @@ from interfaz.estilos import (
     COLOR_ACENTO_HOVER,
     _estilo_input,
     _estilo_boton,
+    _estilo_boton_secundario,
+    _estilo_boton_peligro,
     _estilo_tabla,
     _estilo_scrollbar,
     _tarjeta,
@@ -55,6 +59,8 @@ from interfaz.estilos import (
 
 from interfaz.hub import PanelHub
 from interfaz.asistencia_preview import PanelAsistencia
+from interfaz.toma_asistencia_materia import VistaTomaAsistenciaMateria
+from interfaz.personal import PanelPersonal
 
 
 def resource_path(relative_path):
@@ -68,9 +74,9 @@ def resource_path(relative_path):
 
 # RUTAS DE ASSETS (iconos de control de ventana compartidos)
 ASSETS_PATH = resource_path(os.path.join("assets", "login"))
-ICONO_MINIMIZAR = os.path.join(ASSETS_PATH, "minimize.png")
-ICONO_MAXIMIZAR = os.path.join(ASSETS_PATH, "maximize.png")
-ICONO_CERRAR = os.path.join(ASSETS_PATH, "close.png")
+ICONO_MINIMIZAR = os.path.join(ASSETS_PATH, "minimize_white.png") if os.path.exists(os.path.join(ASSETS_PATH, "minimize_white.png")) else os.path.join(ASSETS_PATH, "minimize.png")
+ICONO_MAXIMIZAR = os.path.join(ASSETS_PATH, "maximize_white.png") if os.path.exists(os.path.join(ASSETS_PATH, "maximize_white.png")) else os.path.join(ASSETS_PATH, "maximize.png")
+ICONO_CERRAR = os.path.join(ASSETS_PATH, "close_white.png") if os.path.exists(os.path.join(ASSETS_PATH, "close_white.png")) else os.path.join(ASSETS_PATH, "close.png")
 
 # Paises de America con la cantidad maxima de digitos de su documento
 # de identidad nacional. OJO: son valores aproximados/orientativos (no
@@ -153,11 +159,11 @@ class FilaAlumnoMinimalista(QFrame):
 
         # 1. Badge Legajo
         lbl_legajo = QLabel(f"#{alumno['numero']}")
-        lbl_legajo.setFont(QFont(FUENTE_MONO, 10, QFont.Bold))
+        lbl_legajo.setFont(QFont(FUENTE_MONO, 11, QFont.Bold))
         lbl_legajo.setStyleSheet(f"""
             color: {COLOR_TEXTO_TENUE};
-            background-color: rgba(255, 255, 255, 0.04);
-            border: 1px solid rgba(255, 255, 255, 0.06);
+            background-color: {COLOR_INPUT};
+            border: 1px solid {COLOR_BORDE};
             border-radius: 6px;
             padding: 4px 8px;
         """)
@@ -166,17 +172,17 @@ class FilaAlumnoMinimalista(QFrame):
         # 2. Nombre y Apellido
         nombre_completo = f"{alumno['apellido'].upper()}, {alumno['nombre']}"
         lbl_nombre = QLabel(nombre_completo)
-        lbl_nombre.setFont(QFont(FUENTE_MONO, 11, QFont.Bold))
+        lbl_nombre.setFont(QFont(FUENTE_MONO, 12, QFont.Bold))
         lbl_nombre.setStyleSheet(f"color: {COLOR_TEXTO}; background: transparent; border: none;")
         layout.addWidget(lbl_nombre, stretch=1)
 
         # 3. Badge Curso (opcional, util cuando se listan alumnos de todos los cursos)
         if curso_texto:
             lbl_curso = QLabel(curso_texto)
-            lbl_curso.setFont(QFont(FUENTE_MONO, 9, QFont.Bold))
+            lbl_curso.setFont(QFont(FUENTE_MONO, 11, QFont.Bold))
             lbl_curso.setStyleSheet(f"""
                 color: {COLOR_TEXTO_TENUE};
-                background-color: rgba(255, 255, 255, 0.04);
+                background-color: {COLOR_INPUT};
                 border: 1px solid {COLOR_BORDE};
                 border-radius: 6px;
                 padding: 3px 8px;
@@ -194,7 +200,7 @@ class FilaAlumnoMinimalista(QFrame):
         else:
             txt_dni = "DNI —"
         lbl_dni = QLabel(txt_dni)
-        lbl_dni.setFont(QFont(FUENTE_MONO, 10))
+        lbl_dni.setFont(QFont(FUENTE_MONO, 11))
         lbl_dni.setStyleSheet(f"color: {COLOR_TEXTO_TENUE}; background: transparent; border: none;")
         layout.addWidget(lbl_dni)
 
@@ -207,14 +213,14 @@ class FilaAlumnoMinimalista(QFrame):
         }
         bandera = banderas.get(nac, "🌐")
         lbl_nac = QLabel(f"{bandera} {nac}")
-        lbl_nac.setFont(QFont(FUENTE_MONO, 10))
+        lbl_nac.setFont(QFont(FUENTE_MONO, 11))
         lbl_nac.setStyleSheet(f"color: {COLOR_TEXTO_TENUE}; background: transparent; border: none;")
         layout.addWidget(lbl_nac)
 
         # 6. Pill de estado
         activo = bool(alumno.get("activo", 1))
         lbl_estado = QLabel("● Activo" if activo else "● De baja")
-        lbl_estado.setFont(QFont(FUENTE_MONO, 9, QFont.Bold))
+        lbl_estado.setFont(QFont(FUENTE_MONO, 11, QFont.Bold))
         if activo:
             lbl_estado.setStyleSheet("""
                 color: #4ade80;
@@ -266,12 +272,13 @@ class FilaAlumnoMinimalista(QFrame):
 
 
 class FilaTomaLista(QFrame):
-    """Fila para registrar asistencia de un alumno en la toma de lista diaria."""
+    """Fila para registrar asistencia de un alumno en la toma de lista diaria con atajos de teclado."""
 
-    def __init__(self, index: int, alumno: dict, on_cambio=None):
+    def __init__(self, index: int, alumno: dict, on_cambio=None, on_navegar=None):
         super().__init__()
         self.alumno = alumno
         self.on_cambio = on_cambio
+        self.on_navegar = on_navegar
 
         self.estado = alumno.get("estado") or "presente"
         self.hora_llegada = alumno.get("hora_llegada")
@@ -281,15 +288,20 @@ class FilaTomaLista(QFrame):
         self.texto_busqueda = f"{alumno['numero']} {alumno['apellido']} {alumno['nombre']} {alumno.get('dni') or ''}".lower()
 
         self.setFixedHeight(54)
+        self.setFocusPolicy(Qt.StrongFocus)
         self.setStyleSheet(f"""
             QFrame {{
-                background-color: rgba(255, 255, 255, 0.02);
-                border: 1px solid rgba(255, 255, 255, 0.05);
+                background-color: {COLOR_INPUT};
+                border: 1px solid {COLOR_BORDE};
                 border-radius: 10px;
             }}
             QFrame:hover {{
-                background-color: rgba(255, 255, 255, 0.04);
-                border: 1px solid rgba(255, 255, 255, 0.10);
+                background-color: #1e222d;
+                border: 1px solid #3b4252;
+            }}
+            QFrame:focus {{
+                border: 1px solid {COLOR_ACENTO};
+                background-color: rgba(37, 99, 235, 0.08);
             }}
         """)
 
@@ -298,11 +310,11 @@ class FilaTomaLista(QFrame):
         layout.setSpacing(12)
 
         lbl_legajo = QLabel(f"#{alumno['numero']}")
-        lbl_legajo.setFont(QFont(FUENTE_MONO, 10, QFont.Bold))
+        lbl_legajo.setFont(QFont(FUENTE_MONO, 11, QFont.Bold))
         lbl_legajo.setStyleSheet(f"""
             color: {COLOR_TEXTO_TENUE};
-            background-color: rgba(255, 255, 255, 0.04);
-            border: 1px solid rgba(255, 255, 255, 0.06);
+            background-color: {COLOR_INPUT};
+            border: 1px solid {COLOR_BORDE};
             border-radius: 6px;
             padding: 4px 8px;
         """)
@@ -310,7 +322,7 @@ class FilaTomaLista(QFrame):
 
         nombre_completo = f"{alumno['apellido'].upper()}, {alumno['nombre']}"
         lbl_nombre = QLabel(nombre_completo)
-        lbl_nombre.setFont(QFont(FUENTE_MONO, 11, QFont.Bold))
+        lbl_nombre.setFont(QFont(FUENTE_MONO, 12, QFont.Bold))
         lbl_nombre.setStyleSheet(f"color: {COLOR_TEXTO}; background: transparent; border: none;")
         layout.addWidget(lbl_nombre, stretch=1)
 
@@ -324,12 +336,12 @@ class FilaTomaLista(QFrame):
         else:
             txt_dni = "DNI —"
         lbl_dni = QLabel(txt_dni)
-        lbl_dni.setFont(QFont(FUENTE_MONO, 10))
+        lbl_dni.setFont(QFont(FUENTE_MONO, 11))
         lbl_dni.setStyleSheet(f"color: {COLOR_TEXTO_TENUE}; background: transparent; border: none;")
         layout.addWidget(lbl_dni)
 
         self.lbl_hora_extra = QLabel("")
-        self.lbl_hora_extra.setFont(QFont(FUENTE_MONO, 9, QFont.Bold))
+        self.lbl_hora_extra.setFont(QFont(FUENTE_MONO, 11, QFont.Bold))
         self.lbl_hora_extra.setStyleSheet(f"""
             color: {COLOR_TEXTO};
             background-color: rgba(255, 255, 255, 0.06);
@@ -340,6 +352,12 @@ class FilaTomaLista(QFrame):
         self.lbl_hora_extra.hide()
         layout.addWidget(self.lbl_hora_extra)
 
+        tooltips = {
+            "presente": "Marcar Presente [1 / P]",
+            "ausente": "Marcar Ausente [2 / A]",
+            "tarde": "Marcar Tarde [3 / T]",
+            "retirado": "Marcar Retirado [4 / R]",
+        }
         self.btns = {}
         for est, label, color_bg, color_border, color_txt in [
             ("presente", "Presente", "rgba(74, 222, 128, 0.15)", "#4ade80", "#4ade80"),
@@ -349,7 +367,8 @@ class FilaTomaLista(QFrame):
         ]:
             btn = QPushButton(label)
             btn.setCursor(Qt.PointingHandCursor)
-            btn.setFont(QFont(FUENTE_MONO, 9, QFont.Bold))
+            btn.setToolTip(tooltips.get(est, ""))
+            btn.setFont(QFont(FUENTE_MONO, 10, QFont.Bold))
             btn.setFixedHeight(30)
             btn.clicked.connect(lambda _, e=est: self.set_estado(e))
             self.btns[est] = {
@@ -361,6 +380,43 @@ class FilaTomaLista(QFrame):
             layout.addWidget(btn)
 
         self._actualizar_botones()
+
+    def mousePressEvent(self, event):
+        self.setFocus()
+        super().mousePressEvent(event)
+
+    def keyPressEvent(self, event):
+        k = event.key()
+        if k in (Qt.Key_1, Qt.Key_P):
+            self.set_estado("presente")
+            if self.on_navegar:
+                self.on_navegar(1)
+            event.accept()
+        elif k in (Qt.Key_2, Qt.Key_A):
+            self.set_estado("ausente")
+            if self.on_navegar:
+                self.on_navegar(1)
+            event.accept()
+        elif k in (Qt.Key_3, Qt.Key_T):
+            self.set_estado("tarde")
+            if self.on_navegar:
+                self.on_navegar(1)
+            event.accept()
+        elif k in (Qt.Key_4, Qt.Key_R):
+            self.set_estado("retirado")
+            if self.on_navegar:
+                self.on_navegar(1)
+            event.accept()
+        elif k in (Qt.Key_Down, Qt.Key_J):
+            if self.on_navegar:
+                self.on_navegar(1)
+            event.accept()
+        elif k in (Qt.Key_Up, Qt.Key_K):
+            if self.on_navegar:
+                self.on_navegar(-1)
+            event.accept()
+        else:
+            super().keyPressEvent(event)
 
     def set_estado(self, nuevo_estado: str):
         hora_ahora = QTime.currentTime().toString("HH:mm")
@@ -422,11 +478,22 @@ class FilaTomaLista(QFrame):
 
 
 class TarjetaCurso(QFrame):
-    def __init__(self, curso, ciclo_anio, on_click):
+    _ESCALAS = {
+        "grande":   {"titulo": 20, "meta": 13, "sub": 12, "padding": 26, "spacing": 12, "min_h": 210, "max_h": 290},
+        "mediano":  {"titulo": 16, "meta": 12, "sub": 11, "padding": 20, "spacing": 10, "min_h": 175, "max_h": 240},
+        "compacto": {"titulo": 14, "meta": 11, "sub": 10, "padding": 16, "spacing": 8,  "min_h": 135, "max_h": 175},
+    }
+
+    def __init__(self, curso, ciclo_anio, on_click, escala: str = "mediano"):
         super().__init__()
         self.curso = curso
         self.on_click = on_click
+        cfg = self._ESCALAS.get(escala, self._ESCALAS["mediano"])
+
         self.setCursor(Qt.PointingHandCursor)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.setMinimumHeight(cfg["min_h"])
+        self.setMaximumHeight(cfg["max_h"])
         self.setStyleSheet(f"""
             QFrame {{
                 background-color: {COLOR_TARJETA};
@@ -435,29 +502,41 @@ class TarjetaCurso(QFrame):
             }}
             QFrame:hover {{
                 background-color: rgba(255, 255, 255, 0.08);
+                border: 1px solid {COLOR_ACENTO};
             }}
         """)
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(16, 16, 16, 16)
-        layout.setSpacing(8)
+        p = cfg["padding"]
+        layout.setContentsMargins(p, p, p, p)
+        layout.setSpacing(cfg["spacing"])
 
         titulo = f"{curso['anio']}°{curso['division']} Ciclo {ciclo_anio}"
         lbl_titulo = QLabel(titulo)
-        lbl_titulo.setFont(QFont(FUENTE_MONO, 14, QFont.Bold))
+        lbl_titulo.setFont(QFont(FUENTE_MONO, cfg["titulo"], QFont.Bold))
         lbl_titulo.setStyleSheet(f"color: {COLOR_TEXTO}; border: none; background: transparent;")
-        
+        lbl_titulo.setWordWrap(True)
+
         lbl_alumnos = QLabel(f"👥 {curso['cantidad_alumnos']} Alumnos Activos")
-        lbl_alumnos.setFont(QFont(FUENTE_MONO, 11))
+        lbl_alumnos.setFont(QFont(FUENTE_MONO, cfg["meta"]))
         lbl_alumnos.setStyleSheet(f"color: {COLOR_TEXTO_TENUE}; border: none; background: transparent;")
 
         layout.addWidget(lbl_titulo)
         layout.addWidget(lbl_alumnos)
-        
-        if curso.get('especialidad'):
-            lbl_esp = QLabel(f"📚 {curso['especialidad']}")
-            lbl_esp.setFont(QFont(FUENTE_MONO, 10))
+
+        detalles = []
+        if curso.get("especialidad"):
+            detalles.append(curso["especialidad"])
+        if curso.get("turno"):
+            detalles.append(f"Turno {curso['turno']}")
+
+        if detalles:
+            lbl_esp = QLabel(f"📚 {' · '.join(detalles)}")
+            lbl_esp.setFont(QFont(FUENTE_MONO, cfg["sub"]))
             lbl_esp.setStyleSheet(f"color: {COLOR_TEXTO_TENUE}; border: none; background: transparent;")
+            lbl_esp.setWordWrap(True)
             layout.addWidget(lbl_esp)
+
+        layout.addStretch()
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
@@ -472,10 +551,11 @@ class PanelCursos(QWidget):
         super().__init__()
         self.ciclo_id = ciclo_id
         self.usuario_id = usuario_id
-        self.usuario_actual = usuario_actual or {"id": usuario_id, "rol": "admin"}
+        self.usuario_actual = dict(usuario_actual) if usuario_actual else {"id": usuario_id, "rol": "admin"}
         self.rol_actual = self.usuario_actual.get("rol", "admin")
         self.on_cambio = on_cambio
         self.on_horario_actualizado = None
+        self.on_ver_registros_globales = None
 
         layout_raiz = QVBoxLayout(self)
         layout_raiz.setContentsMargins(20, 20, 20, 20)
@@ -492,9 +572,14 @@ class PanelCursos(QWidget):
         self.vista_toma_lista = QWidget()
         self._armar_vista_toma_lista()
 
-        self.stack.addWidget(self.vista_general)     # 0
-        self.stack.addWidget(self.vista_detalle)     # 1
-        self.stack.addWidget(self.vista_toma_lista)  # 2
+        self.vista_toma_materia = VistaTomaAsistenciaMateria(
+            on_volver=lambda: self.stack.setCurrentIndex(1)
+        )
+
+        self.stack.addWidget(self.vista_general)      # 0
+        self.stack.addWidget(self.vista_detalle)      # 1
+        self.stack.addWidget(self.vista_toma_lista)   # 2
+        self.stack.addWidget(self.vista_toma_materia) # 3
 
         self.recargar()
 
@@ -509,7 +594,7 @@ class PanelCursos(QWidget):
                 self.usuario_actual["id"] = usuario_id
 
         if hasattr(self, "btn_toggle_alta"):
-            if nuevo_rol in ("admin", "directivo"):
+            if nuevo_rol == "admin":
                 self.btn_toggle_alta.show()
             else:
                 self.btn_toggle_alta.hide()
@@ -520,17 +605,33 @@ class PanelCursos(QWidget):
             if nuevo_rol == "profesor":
                 self.btn_horarios.setText("⏰ Mis Horarios")
                 self.btn_horarios.show()
-            elif nuevo_rol == "admin":
+            elif nuevo_rol in ("admin", "directivo"):
                 self.btn_horarios.setText("⏰ Gestionar Horarios")
+                self.btn_horarios.show()
+            elif nuevo_rol == "preceptor":
+                self.btn_horarios.setText("⏰ Ver Horarios")
                 self.btn_horarios.show()
             else:
                 self.btn_horarios.hide()
+
+        if hasattr(self, "btn_tomar_lista"):
+            if nuevo_rol == "profesor":
+                self.btn_tomar_lista.setText("📝 Asistencia de Clase")
+                self.btn_tomar_lista.show()
+            elif nuevo_rol in ("admin", "preceptor"):
+                self.btn_tomar_lista.setText("📋 Tomar Lista")
+                self.btn_tomar_lista.show()
+            else:  # directivo
+                self.btn_tomar_lista.hide()
 
         if hasattr(self, "btn_eliminar"):
             if nuevo_rol == "admin":
                 self.btn_eliminar.show()
             else:
                 self.btn_eliminar.hide()
+
+        if hasattr(self, "scroll_cursos"):
+            self.recargar()
 
     def _armar_vista_general(self):
         layout = QVBoxLayout(self.vista_general)
@@ -598,29 +699,13 @@ class PanelCursos(QWidget):
         layout.addWidget(self.tarjeta_form)
         self._actualizar_especialidad_habilitada()
 
-        self.tabs_cursos = QTabWidget()
-        self.tabs_cursos.setStyleSheet(f"""
-            QTabWidget::pane {{
-                border: none;
-                background: transparent;
-            }}
-            QTabBar::tab {{
-                background-color: {COLOR_TARJETA};
-                color: {COLOR_TEXTO};
-                font-family: '{FUENTE_MONO}';
-                font-size: 11px;
-                padding: 7px 18px;
-                border-radius: 6px;
-                margin-right: 4px;
-            }}
-            QTabBar::tab:selected {{
-                background-color: {COLOR_ACENTO};
-                font-weight: bold;
-                border-bottom: 2px solid {COLOR_TEXTO};
-            }}
-            QTabBar::tab:hover {{ background-color: {COLOR_ACENTO_HOVER}; }}
-        """)
-        layout.addWidget(self.tabs_cursos, stretch=1)
+        self.scroll_cursos = QScrollArea()
+        self.scroll_cursos.setWidgetResizable(True)
+        self.scroll_cursos.setFrameShape(QFrame.NoFrame)
+        self.scroll_cursos.setStyleSheet(
+            f"QScrollArea {{ background: transparent; border: none; }} {_estilo_scrollbar()}"
+        )
+        layout.addWidget(self.scroll_cursos, stretch=1)
 
     def _armar_vista_detalle(self):
         layout = QVBoxLayout(self.vista_detalle)
@@ -630,7 +715,7 @@ class PanelCursos(QWidget):
         header = QHBoxLayout()
         btn_volver = QPushButton("← Volver a cursos")
         btn_volver.setCursor(Qt.PointingHandCursor)
-        btn_volver.setStyleSheet(_estilo_boton(COLOR_TARJETA, COLOR_ACENTO_HOVER))
+        btn_volver.setStyleSheet(_estilo_boton_secundario())
         btn_volver.clicked.connect(lambda: self.stack.setCurrentIndex(0))
         header.addWidget(btn_volver)
         header.addStretch()
@@ -644,7 +729,7 @@ class PanelCursos(QWidget):
         self.btn_tomar_lista = QPushButton("📋 Tomar Lista")
         self.btn_tomar_lista.setCursor(Qt.PointingHandCursor)
         self.btn_tomar_lista.setStyleSheet(_estilo_boton("#1e3a29", "#284e37"))
-        self.btn_tomar_lista.clicked.connect(self._iniciar_toma_lista)
+        self.btn_tomar_lista.clicked.connect(self._accion_tomar_asistencia)
         header.addWidget(self.btn_tomar_lista)
         
         self.btn_eliminar = QPushButton("Eliminar curso")
@@ -736,7 +821,7 @@ class PanelCursos(QWidget):
         header = QHBoxLayout()
         btn_volver = QPushButton("← Volver al curso")
         btn_volver.setCursor(Qt.PointingHandCursor)
-        btn_volver.setStyleSheet(_estilo_boton(COLOR_TARJETA, COLOR_ACENTO_HOVER))
+        btn_volver.setStyleSheet(_estilo_boton_secundario())
         btn_volver.clicked.connect(lambda: self.stack.setCurrentIndex(1))
         header.addWidget(btn_volver)
 
@@ -749,6 +834,8 @@ class PanelCursos(QWidget):
         header.addWidget(_etiqueta("Fecha:", tenue=True))
         self.date_toma_lista = QDateEdit()
         self.date_toma_lista.setCalendarPopup(True)
+        self.date_toma_lista.setDisplayFormat("dd/MM/yyyy")
+        self.date_toma_lista.setFixedWidth(135)
         self.date_toma_lista.setDate(QDate.currentDate())
         self.date_toma_lista.setStyleSheet(_estilo_input())
         self.date_toma_lista.dateChanged.connect(self._recargar_toma_lista)
@@ -764,6 +851,14 @@ class PanelCursos(QWidget):
             padding: 6px 12px;
         """)
         header.addWidget(self.lbl_reloj)
+
+        self.btn_ver_globales = QPushButton("🌐 Registros Globales")
+        self.btn_ver_globales.setCursor(Qt.PointingHandCursor)
+        self.btn_ver_globales.setToolTip("Ver el resumen global de todos los cursos para esta fecha")
+        self.btn_ver_globales.setStyleSheet(_estilo_boton_secundario(11))
+        self.btn_ver_globales.clicked.connect(self._ir_a_registros_globales)
+        header.addWidget(self.btn_ver_globales)
+
         layout.addLayout(header)
 
         # Barra resumen de métricas y acciones rápidas
@@ -786,13 +881,18 @@ class PanelCursos(QWidget):
 
         layout.addWidget(barra_metricas)
 
-        # Buscador
+        # Buscador y atajos
         fila_busqueda = QHBoxLayout()
         self.input_buscar_toma = QLineEdit()
         self.input_buscar_toma.setPlaceholderText("🔍 Filtrar alumno en la lista...")
         self.input_buscar_toma.setStyleSheet(_estilo_input())
         self.input_buscar_toma.textChanged.connect(self._filtrar_toma_lista)
-        fila_busqueda.addWidget(self.input_buscar_toma)
+        fila_busqueda.addWidget(self.input_buscar_toma, stretch=1)
+
+        lbl_atajos = QLabel("💡 1/P: Presente · 2/A: Ausente · 3/T: Tarde · 4/R: Retirado · ↑/↓: Navegar")
+        lbl_atajos.setFont(QFont(FUENTE_MONO, 11))
+        lbl_atajos.setStyleSheet(f"color: {COLOR_TEXTO_TENUE}; padding-left: 8px;")
+        fila_busqueda.addWidget(lbl_atajos)
         layout.addLayout(fila_busqueda)
 
         # ScrollArea con las filas de toma de lista
@@ -835,6 +935,46 @@ class PanelCursos(QWidget):
         layout.addLayout(fila_guardar)
 
         self.filas_toma = []
+
+    def _accion_tomar_asistencia(self):
+        if self.rol_actual == "profesor":
+            self._iniciar_toma_materia()
+        else:
+            self._iniciar_toma_lista()
+
+    def _iniciar_toma_materia(self, materia_id: int | None = None, fecha=None):
+        if not self.curso_actual:
+            return
+        usr = getattr(self, "usuario_actual", None) or {"id": self.usuario_id, "rol": self.rol_actual}
+        self.vista_toma_materia.configurar(
+            self.curso_actual,
+            usuario_actual=usr,
+            materia_id_inicial=materia_id,
+            fecha_inicial=fecha,
+        )
+        self.stack.setCurrentIndex(3)
+
+    def abrir_curso_y_toma_materia(self, curso_id: int, materia_id: int | None = None):
+        """Abre un curso y despliega directamente la asistencia de cátedra."""
+        curso_obj = None
+        for c in getattr(self, "cursos_cargados", []):
+            if c["id"] == curso_id:
+                curso_obj = c
+                break
+        if not curso_obj:
+            try:
+                from database.conexion import conexion
+                with conexion() as conn:
+                    cur = conn.cursor()
+                    cur.execute("SELECT * FROM curso WHERE id = ?", (curso_id,))
+                    row = cur.fetchone()
+                    if row:
+                        curso_obj = dict(row)
+            except Exception:
+                pass
+        if curso_obj:
+            self._abrir_detalle(curso_obj)
+            self._iniciar_toma_materia(materia_id=materia_id)
 
     def _iniciar_toma_lista(self):
         if not self.curso_actual:
@@ -885,12 +1025,22 @@ class PanelCursos(QWidget):
             self.layout_toma.addWidget(lbl_vacio)
         else:
             for idx, al in enumerate(alumnos, 1):
-                fila = FilaTomaLista(idx, al, on_cambio=self._actualizar_metricas_toma)
+                fila = FilaTomaLista(
+                    idx,
+                    al,
+                    on_cambio=self._actualizar_metricas_toma,
+                    on_navegar=lambda delta, i=idx - 1: self._navegar_fila_toma(i, delta),
+                )
                 self.layout_toma.addWidget(fila)
                 self.filas_toma.append(fila)
 
         self.layout_toma.addStretch()
         self._actualizar_metricas_toma()
+
+    def _navegar_fila_toma(self, idx: int, delta: int):
+        siguiente = idx + delta
+        if 0 <= siguiente < len(self.filas_toma):
+            self.filas_toma[siguiente].setFocus()
 
     def _actualizar_metricas_toma(self):
         p = sum(1 for f in self.filas_toma if f.estado == "presente")
@@ -921,6 +1071,10 @@ class PanelCursos(QWidget):
             self.lbl_sin_resultados_toma.show()
         else:
             self.lbl_sin_resultados_toma.hide()
+
+    def _ir_a_registros_globales(self):
+        if self.on_ver_registros_globales:
+            self.on_ver_registros_globales(self.date_toma_lista.date())
 
     def _guardar_toma_lista(self):
         if not self.curso_actual or not self.filas_toma:
@@ -991,7 +1145,12 @@ class PanelCursos(QWidget):
         self.lbl_detalle_titulo.setText(titulo)
         
         esp = f" · {curso['especialidad']}" if curso.get('especialidad') else ""
-        info = f"Turno {curso['turno']}{esp} · {curso['cantidad_alumnos']} Alumnos Activos"
+        res_prec = servicio_preceptor.listar_preceptores_de_curso(curso["id"])
+        if res_prec.ok and res_prec.datos:
+            preceptores_txt = ", ".join(f"{p['apellido']}, {p['nombre']}" for p in res_prec.datos)
+        else:
+            preceptores_txt = "Sin asignar"
+        info = f"Turno {curso['turno']}{esp} · {curso['cantidad_alumnos']} Alumnos Activos · Preceptor: {preceptores_txt}"
         self.lbl_detalle_info.setText(info)
         
         for fila in self.filas_alumnos:
@@ -1073,14 +1232,36 @@ class PanelCursos(QWidget):
         else:
             QMessageBox.warning(self, "No se pudo eliminar", resultado.mensaje)
 
+    @staticmethod
+    def _calcular_disposicion_cursos(cantidad: int) -> tuple[int, str]:
+        """Devuelve (columnas, escala_tarjeta) segun la cantidad de cursos a cargo."""
+        if cantidad <= 1:
+            return 1, "grande"
+        if cantidad == 2:
+            return 2, "grande"
+        if cantidad == 3:
+            return 3, "mediano"
+        if cantidad == 4:
+            return 2, "mediano"
+        if cantidad <= 6:
+            return 3, "mediano"
+        return 3, "compacto"
+
     def recargar(self):
-        resultado = servicio_curso.listar_cursos(self.ciclo_id)
+        if self.rol_actual == "preceptor" and self.usuario_id:
+            resultado = servicio_preceptor.listar_cursos_de_preceptor(self.usuario_id, self.ciclo_id)
+        else:
+            resultado = servicio_curso.listar_cursos(self.ciclo_id)
         if not resultado.ok:
             QMessageBox.warning(self, "Error", resultado.mensaje)
             return
 
-        cursos = resultado.datos
-        
+        cursos = sorted(
+            resultado.datos,
+            key=lambda c: (c.get("anio", 0), str(c.get("division", ""))),
+        )
+        self.cursos_cargados = cursos
+
         if self.stack.currentIndex() == 1 and self.curso_actual:
             curso_actualizado = next((c for c in cursos if c["id"] == self.curso_actual["id"]), None)
             if curso_actualizado:
@@ -1091,16 +1272,6 @@ class PanelCursos(QWidget):
         elif self.stack.currentIndex() == 2 and self.curso_actual:
             self._recargar_toma_lista()
 
-        ordinales = {1: "1ro", 2: "2do", 3: "3ro", 4: "4to", 5: "5to", 6: "6to"}
-
-        por_anio = {}
-        for c in cursos:
-            por_anio.setdefault(c["anio"], []).append(c)
-
-        tab_activo_idx = self.tabs_cursos.currentIndex()
-        self.tabs_cursos.blockSignals(True)
-        self.tabs_cursos.clear()
-        
         import datetime
         from database.conexion import conexion
         try:
@@ -1109,53 +1280,50 @@ class PanelCursos(QWidget):
                 c.execute("SELECT anio FROM ciclo_lectivo WHERE id = ?", (self.ciclo_id,))
                 f = c.fetchone()
                 ciclo_anio = f["anio"] if f else datetime.date.today().year
-        except:
+        except Exception:
             ciclo_anio = datetime.date.today().year
 
-        for anio in sorted(por_anio.keys()):
-            label_tab = ordinales.get(anio, f"{anio}°")
-            cantidad = len(por_anio[anio])
-
-            contenedor = QScrollArea()
-            contenedor.setWidgetResizable(True)
-            contenedor.setFrameShape(QFrame.NoFrame)
-            contenedor.setStyleSheet("background: transparent; border: none;")
-            
-            contenido = QWidget()
-            contenido.setStyleSheet("background: transparent;")
-            grilla = QGridLayout(contenido)
-            grilla.setContentsMargins(16, 16, 16, 16)
-            grilla.setSpacing(16)
-            
-            fila, col = 0, 0
-            for curso in por_anio[anio]:
-                tarjeta = TarjetaCurso(curso, ciclo_anio, self._abrir_detalle)
-                grilla.addWidget(tarjeta, fila, col)
-                col += 1
-                if col > 2:
-                    col = 0
-                    fila += 1
-                    
-            grilla.setRowStretch(fila + 1, 1)
-            grilla.setColumnStretch(3, 1)
-
-            contenedor.setWidget(contenido)
-            self.tabs_cursos.addTab(contenedor, f"{label_tab}  ({cantidad})")
-
-        if not por_anio:
+        if not cursos:
             vacio = QWidget()
             vacio.setStyleSheet("background: transparent;")
-            lbl = QLabel("No hay cursos para este ciclo lectivo.")
+            msg_vacio = (
+                "No tenés cursos asignados en este ciclo lectivo."
+                if self.rol_actual == "preceptor"
+                else "No hay cursos para este ciclo lectivo."
+            )
+            lbl = QLabel(msg_vacio)
             lbl.setFont(QFont(FUENTE_MONO, 11))
             lbl.setStyleSheet(f"color: {COLOR_TEXTO_TENUE}; background: transparent;")
             lbl.setAlignment(Qt.AlignCenter)
             lay = QVBoxLayout(vacio)
             lay.addWidget(lbl)
-            self.tabs_cursos.addTab(vacio, "Sin cursos")
+            self.scroll_cursos.setWidget(vacio)
+            return
 
-        self.tabs_cursos.blockSignals(False)
-        if 0 <= tab_activo_idx < self.tabs_cursos.count():
-            self.tabs_cursos.setCurrentIndex(tab_activo_idx)
+        columnas, escala = self._calcular_disposicion_cursos(len(cursos))
+
+        contenido = QWidget()
+        contenido.setStyleSheet("background: transparent;")
+        grilla = QGridLayout(contenido)
+        grilla.setContentsMargins(4, 4, 4, 4)
+        grilla.setSpacing(16)
+
+        for col_idx in range(columnas):
+            grilla.setColumnStretch(col_idx, 1)
+
+        for idx, curso in enumerate(cursos):
+            fila = idx // columnas
+            col = idx % columnas
+            tarjeta = TarjetaCurso(curso, ciclo_anio, self._abrir_detalle, escala=escala)
+            grilla.addWidget(tarjeta, fila, col)
+
+        total_filas = (len(cursos) + columnas - 1) // columnas
+        if len(cursos) <= 6:
+            for r in range(total_filas):
+                grilla.setRowStretch(r, 1)
+        grilla.setRowStretch(total_filas, 1)
+
+        self.scroll_cursos.setWidget(contenido)
 
 
 class PanelAlumnos(QWidget):
@@ -1165,6 +1333,7 @@ class PanelAlumnos(QWidget):
         super().__init__()
         self.ciclo_id = ciclo_id
         self.on_cambio = on_cambio
+        self.rol_actual = "admin"
         self.mapa_cursos = {}
         self.filas_alumnos = []
         self.alumno_seleccionado = None
@@ -1172,6 +1341,32 @@ class PanelAlumnos(QWidget):
 
         self._armar_ui()
         self.recargar_cursos()
+
+    def cambiar_rol(self, nuevo_rol: str, usuario_id: int | None = None):
+        """Ajusta permisos y acciones disponibles en el panel de alumnos según el rol."""
+        self.rol_actual = nuevo_rol
+        if hasattr(self, "btn_toggle_alta"):
+            if nuevo_rol == "admin":
+                self.btn_toggle_alta.show()
+                self.btn_baja.show()
+                self.btn_reactivar.show()
+                self.combo_nuevo_curso.show()
+                self.btn_mover.show()
+            elif nuevo_rol == "preceptor":
+                self.btn_toggle_alta.show()
+                self.btn_baja.hide()
+                self.btn_reactivar.hide()
+                self.combo_nuevo_curso.show()
+                self.btn_mover.show()
+            elif nuevo_rol in ("directivo", "profesor"):
+                # Rol de auditoría / supervisión o consulta
+                self.btn_toggle_alta.hide()
+                if hasattr(self, "tarjeta_form"):
+                    self.tarjeta_form.hide()
+                self.btn_baja.hide()
+                self.btn_reactivar.hide()
+                self.combo_nuevo_curso.hide()
+                self.btn_mover.hide()
 
     def _armar_ui(self):
         layout = QVBoxLayout(self)
@@ -1376,7 +1571,8 @@ class PanelAlumnos(QWidget):
     def recargar_cursos(self):
         """Vuelve a cargar los combos de curso (llamar despues de agregar/eliminar un curso)."""
         resultado = servicio_curso.listar_cursos(self.ciclo_id)
-        cursos = resultado.datos if resultado.ok else []
+        cursos = resultado.datos
+        self.cursos_cargados = cursos if resultado.ok else []
 
         self.mapa_cursos = {c["id"]: servicio_curso.obtener_nombre_curso(c) for c in cursos}
 
@@ -1516,6 +1712,19 @@ class PanelAlumnos(QWidget):
         numero = self._numero_seleccionado()
         if numero is None:
             return
+
+        nom = f"{self.alumno_seleccionado.get('apellido', '').upper()}, {self.alumno_seleccionado.get('nombre', '')}"
+        confirm = QMessageBox.question(
+            self,
+            "Confirmar Baja de Alumno",
+            f"¿Estás seguro de que deseas dar de baja al alumno #{numero} ({nom})?\n\n"
+            "El alumno dejará de figurar en las listas activas, pero todo su historial de asistencias se preservará.",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if confirm != QMessageBox.Yes:
+            return
+
         resultado = servicio_alumno.dar_de_baja_alumno(numero)
         if resultado.ok:
             self.recargar_tabla()
@@ -1528,6 +1737,18 @@ class PanelAlumnos(QWidget):
         numero = self._numero_seleccionado()
         if numero is None:
             return
+
+        nom = f"{self.alumno_seleccionado.get('apellido', '').upper()}, {self.alumno_seleccionado.get('nombre', '')}"
+        confirm = QMessageBox.question(
+            self,
+            "Reactivar Alumno",
+            f"¿Deseas reactivar la matrícula del alumno #{numero} ({nom})?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.Yes,
+        )
+        if confirm != QMessageBox.Yes:
+            return
+
         resultado = servicio_alumno.reactivar_alumno(numero)
         if resultado.ok:
             self.recargar_tabla()
@@ -1544,6 +1765,19 @@ class PanelAlumnos(QWidget):
         if nuevo_curso_id is None:
             QMessageBox.warning(self, "Sin cursos", "No hay cursos cargados todavia")
             return
+
+        nom = f"{self.alumno_seleccionado.get('apellido', '').upper()}, {self.alumno_seleccionado.get('nombre', '')}"
+        curso_dest = self.combo_nuevo_curso.currentText()
+        confirm = QMessageBox.question(
+            self,
+            "Confirmar Cambio de Curso",
+            f"¿Estás seguro de reasignar al alumno #{numero} ({nom}) al curso '{curso_dest}'?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if confirm != QMessageBox.Yes:
+            return
+
         resultado = servicio_alumno.cambiar_curso_alumno(numero, nuevo_curso_id)
         if resultado.ok:
             self.recargar_tabla()
@@ -1613,14 +1847,15 @@ class VentanaAdmin(QMainWindow):
                 background-color: transparent;
                 color: {COLOR_TEXTO_TENUE};
                 border: none;
-                border-radius: 10px;
-                padding: 12px 16px;
+                border-radius: 8px;
+                padding: 11px 16px;
                 font-family: '{FUENTE_MONO}';
-                font-weight: bold;
+                font-size: 13px;
+                font-weight: 600;
                 text-align: left;
             }}
-            QPushButton:hover {{
-                background-color: {COLOR_ACENTO};
+            QPushButton:hover:!checked {{
+                background-color: #262933;
                 color: {COLOR_TEXTO};
             }}
             QPushButton:pressed {{
@@ -1628,8 +1863,9 @@ class VentanaAdmin(QMainWindow):
             }}
             QPushButton:checked {{
                 background-color: {COLOR_ACENTO};
-                color: {COLOR_TEXTO};
-                border-left: 3px solid {COLOR_TEXTO};
+                color: #ffffff;
+                font-weight: bold;
+                border-left: 3px solid #93c5fd;
             }}
             QPushButton:checked:hover {{
                 background-color: {COLOR_ACENTO_HOVER};
@@ -1649,7 +1885,7 @@ class VentanaAdmin(QMainWindow):
         self.grupo_nav = QButtonGroup(self)
         self.grupo_nav.setExclusive(True)
         self.botones_nav = []
-        nombres_nav = ["Inicio", "Cursos", "Alumnos", "Asistencia"]
+        nombres_nav = ["Inicio", "Cursos", "Alumnos", "Asistencia", "Personal"]
         for idx, nombre in enumerate(nombres_nav):
             btn = QPushButton(nombre)
             btn.setCheckable(True)
@@ -1678,26 +1914,32 @@ class VentanaAdmin(QMainWindow):
 
         self.panel_hub = PanelHub(self.ciclo_id)
         self.panel_alumnos = PanelAlumnos(self.ciclo_id)
+        self.panel_personal = PanelPersonal(self.ciclo_id)
         usuario_id = self.usuario.get("id", 1) if self.usuario else 1
         self.panel_cursos = PanelCursos(
             self.ciclo_id,
             usuario_id=usuario_id,
-            on_cambio=self.panel_alumnos.recargar_cursos,
+            on_cambio=self._al_cambiar_cursos,
             usuario_actual=self.usuario,
         )
-        self.panel_cursos.on_horario_actualizado = self.panel_hub._cargar_datos
-        self.panel_asistencia = PanelAsistencia(self.ciclo_id)
+        self.panel_cursos.on_horario_actualizado = self._al_actualizar_asignaciones_personal
+        self.panel_cursos.on_ver_registros_globales = self._abrir_registros_globales_desde_toma
+        self.panel_asistencia = PanelAsistencia(self.ciclo_id, usuario_actual=self.usuario)
 
         self.stack.addWidget(self.panel_hub)        # 0 - Inicio
         self.stack.addWidget(self.panel_cursos)     # 1 - Cursos
         self.stack.addWidget(self.panel_alumnos)    # 2 - Alumnos
         self.stack.addWidget(self.panel_asistencia) # 3 - Asistencia
+        self.stack.addWidget(self.panel_personal)   # 4 - Personal
 
         self.grupo_nav.idClicked.connect(self.stack.setCurrentIndex)
         self.stack.currentChanged.connect(lambda i: self.grupo_nav.button(i).setChecked(True))
         self.panel_hub.navegar_a_alumnos.connect(lambda: self.stack.setCurrentIndex(2))
         self.panel_hub.navegar_a_cursos.connect(lambda: self.stack.setCurrentIndex(1))
         self.panel_hub.navegar_a_asistencia.connect(lambda: self.stack.setCurrentIndex(3))
+        self.panel_hub.navegar_a_personal.connect(lambda: self.stack.setCurrentIndex(4))
+        self.panel_hub.tomar_asistencia_materia_solicitada.connect(self._abrir_toma_asistencia_desde_hub)
+        self.panel_personal.asignaciones_actualizadas.connect(self._al_actualizar_asignaciones_personal)
 
         self.stack.setCurrentIndex(0)
         self.grupo_nav.button(0).setChecked(True)
@@ -1708,6 +1950,32 @@ class VentanaAdmin(QMainWindow):
         layout_cuerpo.setSpacing(0)
         layout_cuerpo.addWidget(self.sidebar)
         layout_cuerpo.addWidget(self.stack, stretch=1)
+
+    def _al_cambiar_cursos(self):
+        self.panel_alumnos.recargar_cursos()
+        if hasattr(self, "panel_personal"):
+            self.panel_personal.recargar()
+
+    def _al_actualizar_asignaciones_personal(self):
+        if hasattr(self, "panel_hub"):
+            self.panel_hub._cargar_datos()
+        if hasattr(self, "panel_cursos"):
+            self.panel_cursos.recargar()
+        if hasattr(self, "panel_personal") and self.stack.currentIndex() != 4:
+            self.panel_personal.recargar()
+
+    def _abrir_toma_asistencia_desde_hub(self, curso_id: int, materia_id: int | None = None):
+        self.stack.setCurrentIndex(1)
+        self.panel_cursos.abrir_curso_y_toma_materia(curso_id, materia_id)
+
+    def _abrir_registros_globales_desde_toma(self, fecha_qdate: QDate):
+        self.panel_asistencia.date_desde.setDate(fecha_qdate)
+        self.panel_asistencia.date_hasta.setDate(fecha_qdate)
+        self.panel_asistencia.combo_turno.setCurrentIndex(0)
+        self.panel_asistencia.combo_curso.setCurrentIndex(0)
+        self.panel_asistencia.tabs.setCurrentIndex(0)
+        self.stack.setCurrentIndex(3)
+        self.panel_asistencia._consultar()
 
     def _actualizar_footer_usuario(self, rol_vista: str | None = None):
         if self.usuario:
@@ -1736,6 +2004,21 @@ class VentanaAdmin(QMainWindow):
             pass
         return 2
 
+    def _obtener_preceptor_id_activo(self) -> int:
+        if self.usuario and self.usuario.get("rol") == "preceptor":
+            return self.usuario.get("id", 1)
+        try:
+            from database.conexion import conexion
+            with conexion() as conn:
+                c = conn.cursor()
+                c.execute("SELECT id FROM usuario WHERE rol = 'preceptor' AND activo = 1 ORDER BY id LIMIT 1")
+                row = c.fetchone()
+                if row:
+                    return row["id"]
+        except Exception:
+            pass
+        return 1
+
     def _al_cambiar_rol_vista(self, index: int = 0):
         if not hasattr(self, "combo_rol_vista"):
             return
@@ -1753,15 +2036,20 @@ class VentanaAdmin(QMainWindow):
             self.label_titulo_barra.setText(titulos_rol.get(rol, "Panel de Control"))
 
         profesor_id = self._obtener_profesor_id_activo() if rol == "profesor" else None
+        preceptor_id = self._obtener_preceptor_id_activo() if rol == "preceptor" else None
 
         if hasattr(self, "panel_hub"):
-            self.panel_hub.cambiar_rol(rol, profesor_id=profesor_id)
+            self.panel_hub.cambiar_rol(rol, profesor_id=profesor_id, preceptor_id=preceptor_id)
 
         self._actualizar_footer_usuario(rol_vista=rol)
-        self._aplicar_permisos_vista_rol(rol, profesor_id=profesor_id)
+        usuario_vista_id = (
+            profesor_id if rol == "profesor"
+            else (preceptor_id if rol == "preceptor" else (self.usuario.get("id", 1) if self.usuario else 1))
+        )
+        self._aplicar_permisos_vista_rol(rol, profesor_id=usuario_vista_id)
 
     def _aplicar_permisos_vista_rol(self, rol: str, profesor_id: int | None = None):
-        # 0: Inicio, 1: Cursos, 2: Alumnos, 3: Asistencia
+        # 0: Inicio, 1: Cursos, 2: Alumnos, 3: Asistencia, 4: Personal
         if hasattr(self, "botones_nav") and len(self.botones_nav) >= 4:
             btn_alumnos = self.botones_nav[2]
             if rol == "profesor":
@@ -1771,8 +2059,26 @@ class VentanaAdmin(QMainWindow):
             else:
                 btn_alumnos.show()
 
+        if hasattr(self, "botones_nav") and len(self.botones_nav) >= 5:
+            btn_personal = self.botones_nav[4]
+            if rol in ("admin", "directivo"):
+                btn_personal.show()
+            else:
+                btn_personal.hide()
+                if self.stack.currentIndex() == 4:
+                    self.stack.setCurrentIndex(0)
+
         if hasattr(self, "panel_cursos") and hasattr(self.panel_cursos, "cambiar_rol"):
             self.panel_cursos.cambiar_rol(rol, usuario_id=profesor_id)
+
+        if hasattr(self, "panel_alumnos") and hasattr(self.panel_alumnos, "cambiar_rol"):
+            self.panel_alumnos.cambiar_rol(rol, usuario_id=profesor_id)
+
+        if hasattr(self, "panel_asistencia") and hasattr(self.panel_asistencia, "cambiar_rol"):
+            self.panel_asistencia.cambiar_rol(rol, usuario_id=profesor_id)
+
+        if hasattr(self, "panel_personal") and hasattr(self.panel_personal, "cambiar_rol"):
+            self.panel_personal.cambiar_rol(rol, usuario_id=profesor_id)
 
     def _cerrar_sesion(self):
         """Cierra el admin y abre una nueva ventana de login; nunca termina la app."""
@@ -1850,49 +2156,57 @@ class VentanaAdmin(QMainWindow):
 
         estilo_btn_ventana = """
             QPushButton {
-                background-color: #ffffff;
+                background-color: transparent;
                 border: none;
-                border-radius: 12px;
+                border-radius: 6px;
                 padding: 4px;
             }
-            QPushButton:hover { background-color: #e5e5e5; }
-            QPushButton:pressed { background-color: #cccccc; }
+            QPushButton:hover {
+                background-color: rgba(255, 255, 255, 0.09);
+            }
+            QPushButton:pressed {
+                background-color: rgba(255, 255, 255, 0.16);
+            }
         """
         estilo_btn_cerrar = """
             QPushButton {
-                background-color: #ffffff;
+                background-color: transparent;
                 border: none;
-                border-radius: 12px;
+                border-radius: 6px;
                 padding: 4px;
             }
-            QPushButton:hover { background-color: #ff5c5c; }
-            QPushButton:pressed { background-color: #e04848; }
+            QPushButton:hover {
+                background-color: #ef4444;
+            }
+            QPushButton:pressed {
+                background-color: #dc2626;
+            }
         """
 
         self.btn_minimizar = QPushButton(barra)
-        self.btn_minimizar.setFixedSize(24, 24)
+        self.btn_minimizar.setFixedSize(30, 26)
         self.btn_minimizar.setCursor(Qt.PointingHandCursor)
         self.btn_minimizar.setToolTip("Minimizar")
         self.btn_minimizar.setIcon(QIcon(ICONO_MINIMIZAR))
-        self.btn_minimizar.setIconSize(QSize(14, 14))
+        self.btn_minimizar.setIconSize(QSize(12, 12))
         self.btn_minimizar.setStyleSheet(estilo_btn_ventana)
         self.btn_minimizar.clicked.connect(self.showMinimized)
 
         self.btn_maximizar = QPushButton(barra)
-        self.btn_maximizar.setFixedSize(24, 24)
+        self.btn_maximizar.setFixedSize(30, 26)
         self.btn_maximizar.setCursor(Qt.PointingHandCursor)
         self.btn_maximizar.setToolTip("Maximizar")
         self.btn_maximizar.setIcon(QIcon(ICONO_MAXIMIZAR))
-        self.btn_maximizar.setIconSize(QSize(14, 14))
+        self.btn_maximizar.setIconSize(QSize(12, 12))
         self.btn_maximizar.setStyleSheet(estilo_btn_ventana)
         self.btn_maximizar.clicked.connect(self._alternar_maximizar)
 
         self.btn_cerrar = QPushButton(barra)
-        self.btn_cerrar.setFixedSize(24, 24)
+        self.btn_cerrar.setFixedSize(30, 26)
         self.btn_cerrar.setCursor(Qt.PointingHandCursor)
         self.btn_cerrar.setToolTip("Cerrar")
         self.btn_cerrar.setIcon(QIcon(ICONO_CERRAR))
-        self.btn_cerrar.setIconSize(QSize(14, 14))
+        self.btn_cerrar.setIconSize(QSize(12, 12))
         self.btn_cerrar.setStyleSheet(estilo_btn_cerrar)
         self.btn_cerrar.clicked.connect(self._cerrar_aplicacion)
 
@@ -1910,10 +2224,13 @@ class VentanaAdmin(QMainWindow):
     def _alternar_maximizar(self):
         if self.isMaximized():
             self.showNormal()
-            self.btn_maximizar.setToolTip("Maximizar")
         else:
             self.showMaximized()
-            self.btn_maximizar.setToolTip("Restaurar")
+
+    def changeEvent(self, event):
+        if event.type() == QEvent.WindowStateChange and hasattr(self, "btn_maximizar"):
+            self.btn_maximizar.setToolTip("Restaurar" if self.isMaximized() else "Maximizar")
+        super().changeEvent(event)
 
     def _cerrar_aplicacion(self):
         self.close()

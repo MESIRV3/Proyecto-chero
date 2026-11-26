@@ -26,9 +26,9 @@ ASSETS_PATH = resource_path(os.path.join("assets", "login"))
 FONDO_PATH = os.path.join(ASSETS_PATH, "fondo.jpg")
 ICONO_USER = os.path.join(ASSETS_PATH, "user.png")
 ICONO_LOCK = os.path.join(ASSETS_PATH, "lock.png")
-ICONO_MINIMIZAR = os.path.join(ASSETS_PATH, "minimize.png")
-ICONO_MAXIMIZAR = os.path.join(ASSETS_PATH, "maximize.png")
-ICONO_CERRAR = os.path.join(ASSETS_PATH, "close.png")
+ICONO_MINIMIZAR = os.path.join(ASSETS_PATH, "minimize_white.png") if os.path.exists(os.path.join(ASSETS_PATH, "minimize_white.png")) else os.path.join(ASSETS_PATH, "minimize.png")
+ICONO_MAXIMIZAR = os.path.join(ASSETS_PATH, "maximize_white.png") if os.path.exists(os.path.join(ASSETS_PATH, "maximize_white.png")) else os.path.join(ASSETS_PATH, "maximize.png")
+ICONO_CERRAR = os.path.join(ASSETS_PATH, "close_white.png") if os.path.exists(os.path.join(ASSETS_PATH, "close_white.png")) else os.path.join(ASSETS_PATH, "close.png")
 # =============================================
 
 FUENTE_MONO = "Segoe UI"
@@ -72,52 +72,60 @@ class VentanaLogin(QMainWindow):
 
         estilo_btn = """
             QPushButton {
-                background-color: #ffffff;
+                background-color: transparent;
                 border: none;
-                border-radius: 12px;
+                border-radius: 6px;
                 padding: 4px;
             }
-            QPushButton:hover { background-color: #e5e5e5; }
-            QPushButton:pressed { background-color: #cccccc; }
+            QPushButton:hover {
+                background-color: rgba(255, 255, 255, 0.09);
+            }
+            QPushButton:pressed {
+                background-color: rgba(255, 255, 255, 0.16);
+            }
         """
         estilo_btn_cerrar = """
             QPushButton {
-                background-color: #ffffff;
+                background-color: transparent;
                 border: none;
-                border-radius: 12px;
+                border-radius: 6px;
                 padding: 4px;
             }
-            QPushButton:hover { background-color: #ff5c5c; }
-            QPushButton:pressed { background-color: #e04848; }
+            QPushButton:hover {
+                background-color: #ef4444;
+            }
+            QPushButton:pressed {
+                background-color: #dc2626;
+            }
         """
 
         # Boton minimizar
         self.btn_minimizar = QPushButton(self.barra_titulo)
-        self.btn_minimizar.setFixedSize(24, 24)
+        self.btn_minimizar.setFixedSize(30, 26)
         self.btn_minimizar.setCursor(Qt.PointingHandCursor)
         self.btn_minimizar.setToolTip("Minimizar")
         self.btn_minimizar.setIcon(QIcon(ICONO_MINIMIZAR))
-        self.btn_minimizar.setIconSize(QSize(14, 14))
+        self.btn_minimizar.setIconSize(QSize(12, 12))
         self.btn_minimizar.setStyleSheet(estilo_btn)
         self.btn_minimizar.clicked.connect(self.showMinimized)
 
         # Boton maximizar / restaurar (agrandar / achicar)
         self.btn_maximizar = QPushButton(self.barra_titulo)
-        self.btn_maximizar.setFixedSize(24, 24)
+        self.btn_maximizar.setFixedSize(30, 26)
         self.btn_maximizar.setCursor(Qt.PointingHandCursor)
         self.btn_maximizar.setToolTip("Maximizar")
         self.btn_maximizar.setIcon(QIcon(ICONO_MAXIMIZAR))
-        self.btn_maximizar.setIconSize(QSize(14, 14))
+        self.btn_maximizar.setIconSize(QSize(12, 12))
         self.btn_maximizar.setStyleSheet(estilo_btn)
         self.btn_maximizar.clicked.connect(self._alternar_maximizar)
 
         # Boton cerrar
         self.btn_cerrar = QPushButton(self.barra_titulo)
-        self.btn_cerrar.setFixedSize(24, 24)
+        self.btn_cerrar.setFixedSize(30, 26)
         self.btn_cerrar.setCursor(Qt.PointingHandCursor)
         self.btn_cerrar.setToolTip("Cerrar")
         self.btn_cerrar.setIcon(QIcon(ICONO_CERRAR))
-        self.btn_cerrar.setIconSize(QSize(14, 14))
+        self.btn_cerrar.setIconSize(QSize(12, 12))
         self.btn_cerrar.setStyleSheet(estilo_btn_cerrar)
         self.btn_cerrar.clicked.connect(self._cerrar_aplicacion)
 
@@ -329,7 +337,7 @@ class VentanaLogin(QMainWindow):
             usuario = resultado.datos
             from interfaz.admin import VentanaAdmin
             self.ventana_admin = VentanaAdmin(usuario=usuario)
-            self.ventana_admin.show()
+            self.ventana_admin.showMaximized()
             self.close()
         else:
             QMessageBox.critical(self, "Error de login", resultado.mensaje)

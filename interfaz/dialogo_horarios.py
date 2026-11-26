@@ -33,6 +33,8 @@ from interfaz.estilos import (
     COLOR_TEXTO_TENUE,
     FUENTE_MONO,
     _estilo_boton,
+    _estilo_boton_secundario,
+    _estilo_boton_peligro,
     _estilo_input,
     _estilo_tabla,
     _estilo_scrollbar,
@@ -88,7 +90,7 @@ class DialogoHorarios(QDialog):
             f"Alumnos: {self.curso.get('cantidad_alumnos', 0)}"
         )
         lbl_sub = QLabel(sub_info)
-        lbl_sub.setFont(QFont(FUENTE_MONO, 10))
+        lbl_sub.setFont(QFont(FUENTE_MONO, 11))
         lbl_sub.setStyleSheet(f"color: {COLOR_TEXTO_TENUE};")
         col_tit.addWidget(lbl_sub)
         header.addLayout(col_tit)
@@ -96,7 +98,7 @@ class DialogoHorarios(QDialog):
 
         btn_cerrar = QPushButton("Cerrar")
         btn_cerrar.setCursor(Qt.PointingHandCursor)
-        btn_cerrar.setStyleSheet(_estilo_boton(COLOR_TARJETA, COLOR_ACENTO_HOVER))
+        btn_cerrar.setStyleSheet(_estilo_boton_secundario())
         btn_cerrar.clicked.connect(self.accept)
         header.addWidget(btn_cerrar)
         layout.addLayout(header)
@@ -283,6 +285,10 @@ class DialogoHorarios(QDialog):
         form_layout.addWidget(marco_horario)
         layout.addWidget(self.tarjeta_form)
 
+        # Si el rol es preceptor, el formulario de carga permanece oculto (solo lectura)
+        if self.usuario_actual.get("rol") == "preceptor":
+            self.tarjeta_form.hide()
+
     def _set_horario(self, inicio: str, fin: str):
         self.input_hora_inicio.setText(inicio)
         self.input_hora_fin.setText(fin)
@@ -345,14 +351,31 @@ class DialogoHorarios(QDialog):
             self.tabla_horarios.setItem(fila, 2, QTableWidgetItem(mat_txt))
             self.tabla_horarios.setItem(fila, 3, QTableWidgetItem(prof_txt))
 
-            # Botón de eliminar horario
-            btn_eliminar = QPushButton("✕ Quitar")
-            btn_eliminar.setCursor(Qt.PointingHandCursor)
-            btn_eliminar.setStyleSheet(_estilo_boton(COLOR_PELIGRO, COLOR_PELIGRO_HOVER))
-            btn_eliminar.setFixedHeight(26)
-            horario_id = h["id"]
-            btn_eliminar.clicked.connect(lambda _, hid=horario_id: self._eliminar_horario(hid))
-            self.tabla_horarios.setCellWidget(fila, 4, btn_eliminar)
+            # Botón de eliminar horario con RBAC
+            rol = self.usuario_actual.get("rol", "admin")
+            usr_id = self.usuario_actual.get("id")
+            horario_uid = h.get("usuario_id")
+
+            puede_eliminar = False
+            if rol in ("admin", "directivo"):
+                puede_eliminar = True
+            elif rol == "profesor" and usr_id and horario_uid and usr_id == horario_uid:
+                puede_eliminar = True
+
+            if puede_eliminar:
+                btn_eliminar = QPushButton("✕ Quitar")
+                btn_eliminar.setCursor(Qt.PointingHandCursor)
+                btn_eliminar.setStyleSheet(_estilo_boton_peligro(11))
+                btn_eliminar.setFixedHeight(28)
+                horario_id = h["id"]
+                btn_eliminar.clicked.connect(lambda _, hid=horario_id: self._eliminar_horario(hid))
+                self.tabla_horarios.setCellWidget(fila, 4, btn_eliminar)
+            else:
+                lbl_bloqueado = QLabel("Asignado" if rol == "profesor" else "—")
+                lbl_bloqueado.setFont(QFont(FUENTE_MONO, 11))
+                lbl_bloqueado.setStyleSheet(f"color: {COLOR_TEXTO_TENUE}; background: transparent; border: none;")
+                lbl_bloqueado.setAlignment(Qt.AlignCenter)
+                self.tabla_horarios.setCellWidget(fila, 4, lbl_bloqueado)
 
     def _guardar_horario(self):
         dia_semana = self.combo_dia.currentData()
@@ -409,6 +432,21 @@ class DialogoHorarios(QDialog):
         self.horarios_actualizados.emit()
 
     def _eliminar_horario(self, horario_id: int):
+        rol = self.usuario_actual.get("rol", "admin")
+        usr_id = self.usuario_actual.get("id")
+
+        if rol not in ("admin", "directivo", "profesor"):
+            self._mostrar_feedback("No tienes permisos para eliminar horarios.", error=True)
+            return
+
+        if rol == "profesor":
+            res_lista = servicio_horario.listar_horarios_de_curso(self.curso_id)
+            if res_lista.ok:
+                horario_target = next((h for h in res_lista.datos if h["id"] == horario_id), None)
+                if horario_target and horario_target.get("usuario_id") != usr_id:
+                    self._mostrar_feedback("Solo puedes eliminar tus propios horarios de clase.", error=True)
+                    return
+
         confirm = QMessageBox.question(
             self,
             "Eliminar Horario",
@@ -424,7 +462,7 @@ class DialogoHorarios(QDialog):
             self._mostrar_feedback(res.mensaje, error=True)
             return
 
-        self._mostrar_feedback("Horario eliminado", error=False)
+        self._mostrar_feedback("Horario eliminado correctamente.", error=False)
         self.recargar_horarios()
         self.horarios_actualizados.emit()
 

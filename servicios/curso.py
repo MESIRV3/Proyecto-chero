@@ -96,6 +96,12 @@ def eliminar_curso(curso_id: int):
                     f"No se puede eliminar: el curso tiene {total_alumnos} alumno(s) asignado(s). "
                     "Primero hay que reasignarlos o darlos de baja."
                 )
+            # Limpiar asignaciones de preceptores si la tabla existe
+            cursor.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='preceptor_curso'"
+            )
+            if cursor.fetchone():
+                cursor.execute("DELETE FROM preceptor_curso WHERE curso_id = ?", (curso_id,))
             cursor.execute("DELETE FROM curso WHERE id = ?", (curso_id,))
             if cursor.rowcount == 0:
                 return Resultado.error("El curso no existe")
